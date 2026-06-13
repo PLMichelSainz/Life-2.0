@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 
+// ── Supabase ───────────────────────────────────────────────────────────────────
 const SB_URL="https://qswoavwqldksakyzudaq.supabase.co";
 const SB_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzd29hdndxbGRrc2FreXp1ZGFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMDA3NjAsImV4cCI6MjA5Njg3Njc2MH0.DS7j8Mjxwm_O8v6P5g4R0ggmtcXa2KrdfLKpl6zXZyY";
 async function sbGet(k){try{const r=await fetch(`${SB_URL}/rest/v1/budget_data?key=eq.${k}&select=value`,{headers:{apikey:SB_KEY,Authorization:`Bearer ${SB_KEY}`}});const d=await r.json();return d?.[0]?.value??null;}catch{return null;}}
@@ -19,12 +20,12 @@ const C={bg:"#0a0a0a",s1:"#111111",s2:"#181818",border:"#252525",borderHi:"#3333
 let _id=500;const uid=()=>++_id;
 function fmt(n){return new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",maximumFractionDigits:0}).format(n||0);}
 function fmtD(n){return new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0);}
-function fmtDate(d){return d.toLocaleDateString("es-MX",{weekday:"short",day:"numeric",month:"short"});}
-function daysUntil(d){const n=new Date();n.setHours(0,0,0,0);return Math.round((d-n)/864e5);}
+function fmtDate(d){return d.toLocaleDateString("es-MX",{day:"numeric",month:"short"});}
+function daysUntil(d){const n=new Date();n.setHours(0,0,0,0);const t=new Date(d);t.setHours(0,0,0,0);return Math.round((t-n)/864e5);}
 
-// FIX 1: anchor is Thursday Jun 19 2025 — every 14 days
-function nextCatorcenas(n=5){
-  const anchor=new Date("2025-06-19T12:00:00");
+// Anchor: Jun 19 2025 — every 14 days exactly as user confirmed
+function nextCatorcenas(n=6){
+  const anchor=new Date(2025,5,19,12,0,0); // Jun 19 2025
   const today=new Date();today.setHours(12,0,0,0);
   const elapsed=today.getTime()-anchor.getTime();
   const periods=Math.max(0,Math.ceil(elapsed/(14*864e5)));
@@ -56,38 +57,44 @@ const DEFAULT_ACCOUNTS=[
   {id:7,name:"Plata",type:"credito",balance:0,limit:0},
 ];
 const DEFAULT_CATS=["Vivienda","Alimentación","Salud","Hogar","Personal","Transporte","Suscripciones","Entretenimiento","Ropa"];
-// FIX 3: no duplicate "Otro" — single list, "Otro" only once
 const EXTRA_CATS_DEFAULT=["Ropa","Salidas","Médico","Hogar","Tecnología","Entretenimiento","Otro"];
 const PRIO=[{id:"alta",label:"Alta",color:C.red},{id:"media",label:"Media",color:C.amber},{id:"baja",label:"Baja",color:C.lo}];
 
 // ── Micro UI ───────────────────────────────────────────────────────────────────
 function Toggle({on,onChange}){return<button onClick={onChange} style={{width:32,height:18,borderRadius:99,flexShrink:0,background:on?C.accent:C.border,border:"none",cursor:"pointer",position:"relative",transition:"background .15s"}}><span style={{position:"absolute",top:3,left:on?15:3,width:12,height:12,borderRadius:"50%",background:on?C.bg:C.lo,transition:"left .15s",display:"block"}}/></button>;}
-function MoneyInput({value,onChange,dimmed,width,placeholder}){return<div style={{position:"relative",display:"flex",alignItems:"center",flexShrink:0}}><span style={{position:"absolute",left:8,fontSize:11,color:dimmed?C.lo:C.mid,pointerEvents:"none"}}>$</span><input type="number" min="0" value={value||""} placeholder={placeholder||"0"} onChange={e=>onChange(parseFloat(e.target.value)||0)} disabled={dimmed} style={{width:width||100,paddingLeft:18,paddingRight:6,paddingTop:7,paddingBottom:7,background:dimmed?"transparent":C.s2,border:`1px solid ${dimmed?C.border:C.borderHi}`,borderRadius:7,color:dimmed?C.lo:C.hi,fontFamily:"'DM Mono',monospace",fontWeight:500,textAlign:"right",outline:"none"}}/></div>;}
-function TxtIn({value,onChange,placeholder,dimmed,style:ex}){return<input value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder||""} disabled={dimmed} style={{flex:1,background:"transparent",border:"none",borderBottom:`1px solid ${dimmed?"transparent":C.border}`,color:dimmed?C.lo:C.hi,padding:"3px 0",outline:"none",fontFamily:"inherit",minWidth:0,...ex}}/>;}
+function MI({value,onChange,dimmed,width,ph}){return<div style={{position:"relative",display:"flex",alignItems:"center",flexShrink:0}}><span style={{position:"absolute",left:8,fontSize:11,color:dimmed?C.lo:C.mid,pointerEvents:"none"}}>$</span><input type="number" min="0" value={value||""} placeholder={ph||"0"} onChange={e=>onChange(parseFloat(e.target.value)||0)} disabled={dimmed} style={{width:width||100,paddingLeft:18,paddingRight:6,paddingTop:7,paddingBottom:7,background:dimmed?"transparent":C.s2,border:`1px solid ${dimmed?C.border:C.borderHi}`,borderRadius:7,color:dimmed?C.lo:C.hi,fontFamily:"monospace",fontWeight:500,textAlign:"right",outline:"none"}}/></div>;}
+function TI({value,onChange,placeholder,dimmed,style:ex}){return<input value={value||""} onChange={e=>onChange(e.target.value)} placeholder={placeholder||""} disabled={dimmed} style={{flex:1,background:"transparent",border:"none",borderBottom:`1px solid ${dimmed?"transparent":C.border}`,color:dimmed?C.lo:C.hi,padding:"3px 0",outline:"none",fontFamily:"inherit",minWidth:0,...ex}}/>;}
 function XBtn({onClick}){return<button onClick={onClick} style={{background:"none",border:"none",color:C.lo,cursor:"pointer",fontSize:18,lineHeight:1,padding:"0 2px",flexShrink:0,minWidth:24,transition:"color .15s"}} onMouseEnter={e=>e.currentTarget.style.color=C.red} onMouseLeave={e=>e.currentTarget.style.color=C.lo}>×</button>;}
-function AddBtn({label,onClick,color}){return<button onClick={onClick} style={{display:"flex",alignItems:"center",gap:7,width:"100%",background:"none",border:"none",padding:"10px 16px",color:C.lo,cursor:"pointer",fontFamily:"inherit",transition:"color .15s"}} onMouseEnter={e=>e.currentTarget.style.color=color||C.accent} onMouseLeave={e=>e.currentTarget.style.color=C.lo}><span style={{fontSize:16,lineHeight:1}}>+</span>{label}</button>;}
-function Block({label,total,totalColor,accent,children,footer}){return<div style={{background:C.s1,border:`1px solid ${accent?accent+"44":C.border}`,borderRadius:14,marginBottom:14,overflow:"hidden"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 16px",borderBottom:`1px solid ${C.border}`}}><span style={{fontSize:10,fontWeight:700,letterSpacing:1.5,color:accent||C.mid,textTransform:"uppercase"}}>{label}</span>{total!==undefined&&<span style={{fontFamily:"'DM Mono',monospace",fontSize:14,fontWeight:700,color:totalColor||C.hi}}>{fmt(total)}</span>}</div>{children}{footer&&<div style={{borderTop:`1px solid ${C.border}`}}>{footer}</div>}</div>;}
+function AddBtn({label,onClick,color}){return<button onClick={onClick} style={{display:"flex",alignItems:"center",gap:7,width:"100%",background:"none",border:"none",padding:"10px 16px",color:C.lo,cursor:"pointer",fontFamily:"inherit",transition:"color .15s"}} onMouseEnter={e=>e.currentTarget.style.color=color||C.accent} onMouseLeave={e=>e.currentTarget.style.color=C.lo}><span style={{fontSize:16}}>+</span>{label}</button>;}
+function Block({label,total,totalColor,accent,children,footer,collapsible}){
+  const [open,setOpen]=useState(true);
+  return<div style={{background:C.s1,border:`1px solid ${accent?accent+"44":C.border}`,borderRadius:14,marginBottom:12,overflow:"hidden"}}>
+    <div onClick={collapsible?()=>setOpen(o=>!o):undefined} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 16px",borderBottom:open?`1px solid ${C.border}`:"none",cursor:collapsible?"pointer":"default"}}>
+      <span style={{fontSize:10,fontWeight:700,letterSpacing:1.5,color:accent||C.mid,textTransform:"uppercase"}}>{label}{collapsible&&<span style={{marginLeft:6,fontSize:10,color:C.lo}}>{open?"▾":"▸"}</span>}</span>
+      {total!==undefined&&<span style={{fontFamily:"monospace",fontSize:14,fontWeight:700,color:totalColor||C.hi}}>{fmt(total)}</span>}
+    </div>
+    {open&&<>{children}{footer&&<div style={{borderTop:`1px solid ${C.border}`}}>{footer}</div>}</>}
+  </div>;
+}
 function TR({children,dimmed}){return<div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 16px",borderBottom:`1px solid ${C.border}`,opacity:dimmed?0.3:1,flexWrap:"wrap"}}>{children}</div>;}
-function Badge({label,color}){return<span style={{fontSize:10,fontWeight:700,color,background:color+"18",borderRadius:5,padding:"2px 7px",letterSpacing:.3,flexShrink:0,whiteSpace:"nowrap"}}>{label}</span>;}
-function NumIn({value,onChange,width,step,min}){return<input type="number" min={min||0} step={step||1} value={value||""} onChange={e=>onChange(parseFloat(e.target.value)||0)} style={{width:width||70,background:C.s2,border:`1px solid ${C.borderHi}`,borderRadius:7,color:C.hi,padding:"6px 8px",fontFamily:"'DM Mono',monospace",fontSize:13,textAlign:"right",outline:"none"}}/>;}
+function Badge({label,color}){return<span style={{fontSize:10,fontWeight:700,color,background:color+"18",borderRadius:5,padding:"2px 7px",flexShrink:0,whiteSpace:"nowrap"}}>{label}</span>;}
+function NI({value,onChange,width}){return<input type="number" min="0" value={value||""} onChange={e=>onChange(parseFloat(e.target.value)||0)} style={{width:width||70,background:C.s2,border:`1px solid ${C.borderHi}`,borderRadius:7,color:C.hi,padding:"6px 8px",fontFamily:"monospace",fontSize:13,textAlign:"right",outline:"none"}}/>;}
 
-// FIX 3: CatSelect with free-text — no duplicate Otro
-function CatSelect({value,onChange,cats}){
-  const known=cats.includes(value);
-  const [custom,setCustom]=useState(!known&&!!value);
+function CatSel({value,onChange,cats}){
+  const [custom,setCustom]=useState(!cats.includes(value)&&!!value);
   if(custom)return<div style={{display:"flex",gap:4,flexShrink:0}}>
     <input value={value} onChange={e=>onChange(e.target.value)} placeholder="Categoría" style={{width:100,background:C.s2,border:`1px solid ${C.borderHi}`,borderRadius:7,color:C.hi,padding:"5px 8px",fontSize:12,fontFamily:"inherit",outline:"none"}}/>
     <button onClick={()=>{setCustom(false);onChange(cats[0]);}} style={{background:"none",border:"none",color:C.lo,cursor:"pointer",fontSize:12}}>↩</button>
   </div>;
-  return<select value={known?value:cats[0]} onChange={e=>{if(e.target.value==="__new__"){setCustom(true);onChange("");}else onChange(e.target.value);}} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:7,color:C.mid,padding:"5px 6px",fontFamily:"inherit",outline:"none",fontSize:12,flexShrink:0}}>
+  return<select value={cats.includes(value)?value:cats[0]} onChange={e=>{if(e.target.value==="__new__"){setCustom(true);onChange("");}else onChange(e.target.value);}} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:7,color:C.mid,padding:"5px 6px",fontFamily:"inherit",outline:"none",fontSize:12,flexShrink:0}}>
     {cats.map(c=><option key={c} value={c}>{c}</option>)}
     <option value="__new__">+ Agregar...</option>
   </select>;
 }
 
 // ── TABS ───────────────────────────────────────────────────────────────────────
-const TABS=[{id:"resumen",label:"Resumen"},{id:"catorcena",label:"Catorcena"},{id:"cuentas",label:"Cuentas"},{id:"gastos",label:"Gastos"},{id:"deudas",label:"Deudas"},{id:"ahorro",label:"Ahorro"},{id:"transporte",label:"Bus"},{id:"wish",label:"Wishlist"}];
-function Tabs({active,onChange}){return<div style={{display:"flex",gap:3,marginBottom:14,background:C.s1,border:`1px solid ${C.border}`,borderRadius:10,padding:3,overflowX:"auto"}}>{TABS.map(t=><button key={t.id} onClick={()=>onChange(t.id)} style={{flex:"0 0 auto",padding:"8px 11px",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontWeight:600,fontSize:12,background:active===t.id?C.s2:"transparent",color:active===t.id?C.hi:C.lo,whiteSpace:"nowrap",boxShadow:active===t.id?`0 0 0 1px ${C.border}`:"none"}}>{t.label}</button>)}</div>;}
+const TABS=[{id:"main",label:"💰 Principal"},{id:"cuentas",label:"🏦 Cuentas"},{id:"deudas",label:"📋 Deudas"},{id:"transporte",label:"🚌 Bus"},{id:"wish",label:"⭐ Wishlist"}];
+function Tabs({active,onChange}){return<div style={{display:"flex",gap:3,marginBottom:14,background:C.s1,border:`1px solid ${C.border}`,borderRadius:10,padding:3,overflowX:"auto"}}>{TABS.map(t=><button key={t.id} onClick={()=>onChange(t.id)} style={{flex:"0 0 auto",padding:"8px 12px",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontWeight:600,fontSize:12,background:active===t.id?C.s2:"transparent",color:active===t.id?C.hi:C.lo,whiteSpace:"nowrap",boxShadow:active===t.id?`0 0 0 1px ${C.border}`:"none"}}>{t.label}</button>)}</div>;}
 
 // ── HERO ───────────────────────────────────────────────────────────────────────
 function Hero({income,fixed,extra,saving,debt,synced}){
@@ -99,53 +106,215 @@ function Hero({income,fixed,extra,saving,debt,synced}){
       <div style={{fontSize:10,letterSpacing:1.5,color:C.mid,textTransform:"uppercase",fontWeight:600}}>Balance mensual</div>
       <div style={{fontSize:10,color:synced?C.green:C.lo}}>{synced?"● sync":"○ ..."}</div>
     </div>
-    <div style={{fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:32,letterSpacing:-1,marginBottom:14,color:bal>=0?C.accent:C.red,lineHeight:1}}>{fmt(bal)}</div>
+    <div style={{fontFamily:"monospace",fontWeight:700,fontSize:32,letterSpacing:-1,marginBottom:14,color:bal>=0?C.accent:C.red,lineHeight:1}}>{fmt(bal)}</div>
     <div style={{height:2,background:C.border,borderRadius:99,marginBottom:14}}><div style={{height:"100%",width:`${pct}%`,borderRadius:99,background:bar,transition:"width .4s"}}/></div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:5}}>
       {[{l:"Ingresos",v:income,c:C.green},{l:"Fijos",v:fixed,c:C.hi},{l:"Extra",v:extra,c:C.amber},{l:"Ahorro",v:saving,c:C.teal},{l:"Deudas",v:debt,c:C.pink}].map(s=><div key={s.l} style={{borderLeft:`2px solid ${C.border}`,paddingLeft:7}}>
         <div style={{fontSize:9,color:C.mid,marginBottom:2}}>{s.l}</div>
-        <div style={{fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:10,color:s.c}}>{fmt(s.v)}</div>
+        <div style={{fontFamily:"monospace",fontWeight:700,fontSize:10,color:s.c}}>{fmt(s.v)}</div>
       </div>)}
     </div>
   </div>;
 }
 
-// ── CATORCENA ─────────────────────────────────────────────────────────────────
-function CatorcenaTab({fixed,incomes,extras,savingGoals,debts,totalIncome}){
+// ── CATORCENA STRIP ────────────────────────────────────────────────────────────
+function CatorcenaStrip({totalIncome,totalFixed,totalExtra,savingGoals,debts}){
   const dates=useMemo(()=>nextCatorcenas(5),[]);
   const [sel,setSel]=useState(0);
   const pay=dates[sel];
   const dias=daysUntil(pay);
   const incomeCat=totalIncome/2;
-  const fixedCat=fixed.filter(r=>r.active).reduce((s,r)=>s+r.amount,0)/2;
-  const extrasCat=extras.reduce((s,r)=>s+r.amount,0);
+  const fixedCat=totalFixed/2;
   const savingCat=savingGoals.reduce((s,g)=>s+Math.max(incomeCat*(g.pct/100),(g.target&&g.months?g.target/(g.months*2):0)),0);
   const debtCat=debts.filter(d=>d.active).reduce((s,d)=>s+(d.monthly||0)/2,0);
-  const balCat=incomeCat-fixedCat-extrasCat-savingCat-debtCat;
-  return<div>
-    <div style={{marginBottom:14}}>
-      <div style={{fontSize:10,color:C.lo,letterSpacing:.8,textTransform:"uppercase",marginBottom:8,fontWeight:600}}>Próximos pagos — jueves catorcenal (19 jun base)</div>
-      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-        {dates.map((d,i)=>{const dU=daysUntil(d);return<button key={i} onClick={()=>setSel(i)} style={{padding:"7px 12px",borderRadius:8,border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600,background:sel===i?C.accent:C.s2,color:sel===i?C.bg:C.mid,outline:sel===i?"none":`1px solid ${C.border}`}}>
-          {fmtDate(d)}<br/><span style={{fontSize:10,fontWeight:400,color:sel===i?C.bg+"99":C.lo}}>{dU===0?"hoy":dU>0?`en ${dU}d`:`hace ${-dU}d`}</span>
-        </button>;})}
-      </div>
+  const extrasCat=totalExtra; // esporadicos del periodo actual completo
+  const balCat=incomeCat-fixedCat-savingCat-debtCat-extrasCat;
+
+  return<div style={{marginBottom:12}}>
+    {/* date selector */}
+    <div style={{fontSize:10,color:C.lo,letterSpacing:.8,textTransform:"uppercase",marginBottom:8,fontWeight:600}}>
+      Próxima catorcena — viernes cada 14 días (base 19 jun 2025)
     </div>
-    <div style={{background:C.s1,border:`1px solid ${C.accent}44`,borderRadius:14,padding:"14px 16px",marginBottom:14}}>
-      <div style={{fontSize:10,color:C.accent,letterSpacing:1,textTransform:"uppercase",fontWeight:700,marginBottom:8}}>
-        Catorcena — {fmtDate(pay)} {dias>0?`(en ${dias} días)`:dias===0?"(hoy)":"(pasada)"}
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+      {dates.map((d,i)=>{
+        const dU=daysUntil(d);
+        return<button key={i} onClick={()=>setSel(i)} style={{padding:"7px 12px",borderRadius:8,border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600,background:sel===i?C.accent:C.s2,color:sel===i?C.bg:C.mid,outline:sel===i?"none":`1px solid ${C.border}`}}>
+          {fmtDate(d)}<br/><span style={{fontSize:10,fontWeight:400,color:sel===i?C.bg+"99":C.lo}}>{dU===0?"hoy":dU>0?`en ${dU}d`:`hace ${-dU}d`}</span>
+        </button>;
+      })}
+    </div>
+
+    {/* catorcena summary card */}
+    <div style={{background:C.s1,border:`2px solid ${C.accent}33`,borderRadius:14,padding:"14px 16px"}}>
+      <div style={{fontSize:10,color:C.accent,letterSpacing:1,textTransform:"uppercase",fontWeight:700,marginBottom:6}}>
+        {fmtDate(pay)} — {dias>0?`en ${dias} días`:dias===0?"hoy":"pasada"}
       </div>
-      <div style={{fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:28,color:balCat>=0?C.accent:C.red,marginBottom:12}}>{fmt(balCat)}</div>
-      {[{l:"Ingreso estimado",v:incomeCat,c:C.green,s:"+"},{l:"Gastos fijos (½)",v:fixedCat,c:C.hi,s:"−"},{l:"Esporádicos",v:extrasCat,c:C.amber,s:"−"},{l:"Ahorro (½)",v:savingCat,c:C.teal,s:"−"},{l:"Deudas (½)",v:debtCat,c:C.pink,s:"−"}].map(r=><div key={r.l} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:`1px solid ${C.border}`}}>
-        <span style={{fontSize:12,color:C.mid}}>{r.l}</span>
-        <span style={{fontFamily:"'DM Mono',monospace",fontSize:12,fontWeight:600,color:r.c}}>{r.s} {fmt(r.v)}</span>
-      </div>)}
+      <div style={{fontFamily:"monospace",fontWeight:700,fontSize:26,color:balCat>=0?C.accent:C.red,marginBottom:10}}>{fmt(balCat)}</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+        {[
+          {l:"Ingreso catorcena",v:incomeCat,c:C.green,s:"+"},
+          {l:"Gastos fijos (½)",v:fixedCat,c:C.hi,s:"−"},
+          {l:"Ahorro (½)",v:savingCat,c:C.teal,s:"−"},
+          {l:"Deudas (½)",v:debtCat,c:C.pink,s:"−"},
+        ].map(r=><div key={r.l} style={{background:C.s2,borderRadius:8,padding:"8px 10px"}}>
+          <div style={{fontSize:10,color:C.lo,marginBottom:3}}>{r.l}</div>
+          <div style={{fontFamily:"monospace",fontWeight:700,fontSize:13,color:r.c}}>{r.s} {fmt(r.v)}</div>
+        </div>)}
+      </div>
+      {extrasCat>0&&<div style={{marginTop:8,fontSize:11,color:C.amber}}>+ Esporádicos del mes: {fmt(extrasCat)}</div>}
     </div>
   </div>;
 }
 
-// ── CUENTAS — FIX 2: línea de crédito disponible ─────────────────────────────
-function CuentasTab(){
+// ── MAIN TAB (todo junto) ─────────────────────────────────────────────────────
+function MainTab({incomes,setIncomes,fixed,setFixed,extras,setExtras,cats,setCats,extraCats,setExtraCats,savingGoals,setSavingGoals,debts,totalIncome,totalFixed,totalExtra}){
+  const incomeCat=totalIncome/2;
+  const [savingGoalsLocal,setSaving]=useSynced("saving_goals",[]);
+  const [debtsLocal]=useSynced("debts",[]);
+
+  // Expense quick-add state
+  const [eName,setEName]=useState("");const [eWhere,setEWhere]=useState("");const [eCat,setECat]=useState(extraCats[0]||"Otro");const [eAmt,setEAmt]=useState("");
+
+  function addExtra(){
+    const a=parseFloat(eAmt);if(!eName.trim()||!a)return;
+    if(!extraCats.includes(eCat))setExtraCats(p=>[...p,eCat]);
+    setExtras(p=>[...p,{id:uid(),name:eName.trim(),where:eWhere.trim(),cat:eCat,amount:a,date:new Date().toISOString().slice(0,10)}]);
+    setEName("");setEWhere("");setEAmt("");
+  }
+
+  const updI=(id,f,v)=>setIncomes(p=>p.map(r=>r.id===id?{...r,[f]:v}:r));
+  const updF=(id,f,v)=>setFixed(p=>p.map(r=>r.id===id?{...r,[f]:v}:r));
+
+  const totalSaving=useMemo(()=>savingGoalsLocal.reduce((s,g)=>s+Math.max(incomeCat*(g.pct/100),(g.target&&g.months?g.target/g.months:0)),0),[savingGoalsLocal,incomeCat]);
+  const totalDebt=useMemo(()=>debtsLocal.filter(d=>d.active).reduce((s,d)=>s+(d.monthly||0),0),[debtsLocal]);
+  const bal=totalIncome-totalFixed-totalExtra-totalSaving-totalDebt;
+
+  return<div>
+    {/* Catorcena strip */}
+    <CatorcenaStrip totalIncome={totalIncome} totalFixed={totalFixed} totalExtra={totalExtra} savingGoals={savingGoalsLocal} debts={debtsLocal}/>
+
+    {/* INGRESOS */}
+    <Block label="Ingresos" total={totalIncome} totalColor={C.green} collapsible
+      footer={<AddBtn label="Agregar fuente" onClick={()=>setIncomes(p=>[...p,{id:uid(),name:"Nuevo ingreso",amount:0}])}/>}>
+      {incomes.map(r=><TR key={r.id}>
+        <TI value={r.name} onChange={v=>updI(r.id,"name",v)} placeholder="Fuente"/>
+        <MI value={r.amount} onChange={v=>updI(r.id,"amount",v)}/>
+        <XBtn onClick={()=>setIncomes(p=>p.filter(x=>x.id!==r.id))}/>
+      </TR>)}
+    </Block>
+
+    {/* GASTOS FIJOS */}
+    <Block label="Gastos fijos mensuales" total={totalFixed} collapsible
+      footer={<AddBtn label="Agregar gasto fijo" onClick={()=>setFixed(p=>[...p,{id:uid(),name:"Nuevo gasto",cat:cats[0],amount:0,active:true}])}/>}>
+      {fixed.map(r=><TR key={r.id} dimmed={!r.active}>
+        <Toggle on={r.active} onChange={()=>setFixed(p=>p.map(x=>x.id===r.id?{...x,active:!x.active}:x))}/>
+        <TI value={r.name} onChange={v=>updF(r.id,"name",v)} dimmed={!r.active}/>
+        <CatSel value={r.cat} onChange={v=>updF(r.id,"cat",v)} cats={cats}/>
+        <MI value={r.amount} onChange={v=>updF(r.id,"amount",v)} dimmed={!r.active}/>
+        <XBtn onClick={()=>setFixed(p=>p.filter(x=>x.id!==r.id))}/>
+      </TR>)}
+    </Block>
+
+    {/* GASTOS ESPORADICOS */}
+    <Block label="Gastos esporádicos" total={totalExtra} totalColor={C.amber} accent={C.amber} collapsible
+      footer={null}>
+      {/* Quick add */}
+      <div style={{padding:"10px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",flexDirection:"column",gap:8}}>
+        <div style={{display:"flex",gap:8}}>
+          <input value={eName} onChange={e=>setEName(e.target.value)} placeholder="¿Qué?" onKeyDown={e=>e.key==="Enter"&&addExtra()} style={{flex:2,background:C.s2,border:`1px solid ${C.borderHi}`,borderRadius:7,color:C.hi,padding:"7px 10px",fontFamily:"inherit",outline:"none"}}/>
+          <input value={eWhere} onChange={e=>setEWhere(e.target.value)} placeholder="¿Dónde?" onKeyDown={e=>e.key==="Enter"&&addExtra()} style={{flex:1,background:C.s2,border:`1px solid ${C.border}`,borderRadius:7,color:C.hi,padding:"7px 10px",fontFamily:"inherit",outline:"none"}}/>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <CatSel value={eCat} onChange={setECat} cats={extraCats}/>
+          <div style={{position:"relative",flexShrink:0}}><span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:C.mid,pointerEvents:"none"}}>$</span>
+            <input type="number" min="0" value={eAmt} placeholder="0" onChange={e=>setEAmt(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addExtra()} style={{width:100,paddingLeft:18,paddingRight:6,paddingTop:7,paddingBottom:7,background:C.s2,border:`1px solid ${C.borderHi}`,borderRadius:7,color:C.hi,fontFamily:"monospace",textAlign:"right",outline:"none"}}/>
+          </div>
+          <button onClick={addExtra} style={{background:C.amber,color:C.bg,border:"none",borderRadius:7,padding:"7px 16px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>+</button>
+        </div>
+      </div>
+      {extras.length===0&&<div style={{padding:"10px 16px",color:C.lo,fontStyle:"italic",fontSize:12}}>Sin gastos este mes</div>}
+      {extras.length>0&&<div style={{overflowY:"auto",maxHeight:220}}>
+        {extras.map(r=><div key={r.id} style={{display:"grid",gridTemplateColumns:"1fr 70px 75px 24px",gap:6,alignItems:"center",padding:"7px 16px",borderBottom:`1px solid ${C.border}`,transition:"background .1s"}} onMouseEnter={e=>e.currentTarget.style.background=C.s2} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+          <div><div style={{color:C.hi,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:13}}>{r.name}</div>{r.where&&<div style={{color:C.lo,fontSize:10}}>{r.where}</div>}</div>
+          <span style={{fontSize:11,color:C.mid,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.cat}</span>
+          <span style={{fontFamily:"monospace",color:C.amber,textAlign:"right",fontSize:13}}>{fmt(r.amount)}</span>
+          <XBtn onClick={()=>setExtras(p=>p.filter(x=>x.id!==r.id))}/>
+        </div>)}
+      </div>}
+    </Block>
+
+    {/* AHORRO */}
+    <AhorroBlock totalIncome={totalIncome}/>
+
+    {/* RESUMEN FINAL */}
+    <div style={{background:C.s1,border:`1px solid ${C.accent}33`,borderRadius:14,overflow:"hidden",marginBottom:12}}>
+      <div style={{padding:"10px 16px",borderBottom:`1px solid ${C.border}`}}><span style={{fontSize:10,fontWeight:700,letterSpacing:1.5,color:C.accent,textTransform:"uppercase"}}>Resumen mensual</span></div>
+      {[{l:"Ingresos",v:totalIncome,s:"+",c:C.green},{l:"Gastos fijos",v:totalFixed,s:"−",c:C.hi},{l:"Esporádicos",v:totalExtra,s:"−",c:C.amber},{l:"Ahorro",v:totalSaving,s:"−",c:C.teal},{l:"Deudas",v:totalDebt,s:"−",c:C.pink}].map(({l,v,s,c})=><div key={l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 16px",borderBottom:`1px solid ${C.border}`}}><span style={{color:C.mid,fontSize:13}}>{l}</span><span style={{fontFamily:"monospace",fontWeight:600,color:c}}>{s} {fmt(v)}</span></div>)}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"13px 16px"}}><span style={{fontSize:14,fontWeight:700,color:C.hi}}>Balance disponible</span><span style={{fontFamily:"monospace",fontSize:20,fontWeight:700,color:bal>=0?C.accent:C.red}}>{fmt(bal)}</span></div>
+    </div>
+  </div>;
+}
+
+// ── AHORRO (block reutilizable) ────────────────────────────────────────────────
+function AhorroBlock({totalIncome}){
+  const [goals,setGoals]=useSynced("saving_goals",[]);
+  const [name,setName]=useState("");const [target,setTarget]=useState("");const [pct,setPct]=useState("");const [months,setMonths]=useState("");
+  function add(){if(!name.trim())return;setGoals(p=>[...p,{id:uid(),name:name.trim(),target:parseFloat(target)||0,pct:parseFloat(pct)||0,months:parseInt(months)||0,saved:0}]);setName("");setTarget("");setPct("");setMonths("");}
+  function deposit(id,amt){setGoals(p=>p.map(g=>g.id===id?{...g,saved:(g.saved||0)+amt}:g));}
+  function del(id){setGoals(p=>p.filter(g=>g.id!==id));}
+  const incomeCat=totalIncome/2;
+  const total=goals.reduce((s,g)=>s+Math.max(incomeCat*(g.pct/100),(g.target&&g.months?g.target/g.months:0)),0);
+  const inp={background:C.s2,border:`1px solid ${C.borderHi}`,borderRadius:7,color:C.hi,padding:"7px 10px",fontFamily:"inherit",outline:"none",width:"100%"};
+  return<Block label="Ahorro" total={total} totalColor={C.teal} accent={C.teal} collapsible
+    footer={<AddBtn label="Nuevo objetivo" onClick={add} color={C.teal}/>}>
+    <div style={{padding:"10px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",flexDirection:"column",gap:8}}>
+      <input value={name} onChange={e=>setName(e.target.value)} placeholder="Nombre (ej. Vacaciones, Fondo)" style={inp}/>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <div style={{flex:1,minWidth:80,position:"relative"}}><span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:C.mid,pointerEvents:"none"}}>$</span><input type="number" min="0" value={target} onChange={e=>setTarget(e.target.value)} placeholder="Meta $" style={{...inp,paddingLeft:18,textAlign:"right"}}/></div>
+        <div style={{flex:1,minWidth:70,position:"relative"}}><span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:C.mid,pointerEvents:"none"}}>%</span><input type="number" min="0" max="100" value={pct} onChange={e=>setPct(e.target.value)} placeholder="% ingreso" style={{...inp,paddingRight:24,textAlign:"right"}}/></div>
+        <div style={{flex:1,minWidth:70}}><input type="number" min="1" value={months} onChange={e=>setMonths(e.target.value)} placeholder="# meses" style={{...inp,textAlign:"right"}}/></div>
+      </div>
+    </div>
+    {goals.length===0&&<div style={{padding:"10px 16px",color:C.lo,fontStyle:"italic",fontSize:12}}>Sin objetivos de ahorro</div>}
+    {goals.map(g=>{
+      const catAmt=Math.max(incomeCat*(g.pct/100),(g.target&&g.months?g.target/(g.months*2):0));
+      const catN=g.target&&catAmt>0?Math.ceil(g.target/catAmt):0;
+      const pct2=g.target>0?Math.min(100,((g.saved||0)/g.target)*100):0;
+      const [dep,setDep]=useState("");
+      const [customN,setCustomN]=useState("");
+      const cN=parseInt(customN)||0;
+      const customAmt=cN>0&&g.target>0?Math.max(0,g.target-(g.saved||0))/cN:0;
+      return<div key={g.id} style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+          <span style={{color:C.hi,fontWeight:600}}>{g.name}</span>
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>{catAmt>0&&<Badge label={`${fmt(catAmt)}/cat`} color={C.teal}/>}<XBtn onClick={()=>del(g.id)}/></div>
+        </div>
+        {g.target>0&&<>
+          <div style={{height:4,background:C.border,borderRadius:99,marginBottom:5}}><div style={{height:"100%",width:`${pct2}%`,borderRadius:99,background:C.teal,transition:"width .4s"}}/></div>
+          <div style={{fontSize:11,color:C.mid,marginBottom:8}}>{fmt(g.saved||0)} / {fmt(g.target)} · {pct2.toFixed(0)}%</div>
+          <div style={{background:C.s2,borderRadius:8,padding:"8px 12px",marginBottom:8}}>
+            <div style={{fontSize:10,color:C.lo,letterSpacing:.8,textTransform:"uppercase",marginBottom:6,fontWeight:600}}>Plan catorcenal</div>
+            {catN>0&&<div style={{fontSize:11,color:C.teal,marginBottom:4}}>Auto: {fmt(catAmt)}/cat × {catN} catorcenas (~{(catN/2).toFixed(1)} meses)</div>}
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+              <span style={{fontSize:11,color:C.mid,flexShrink:0}}>Lograrlo en</span>
+              <NI value={customN} onChange={v=>setCustomN(v)} width={60}/>
+              <span style={{fontSize:11,color:C.mid,flexShrink:0}}>catorcenas →</span>
+              {customAmt>0&&<><Badge label={`${fmt(customAmt)}/cat`} color={C.accent}/>{incomeCat>0&&<Badge label={`${((customAmt/incomeCat)*100).toFixed(1)}% ingreso`} color={C.mid}/>}</>}
+            </div>
+          </div>
+        </>}
+        {g.pct>0&&<div style={{fontSize:11,color:C.mid,marginBottom:6}}>{g.pct}% ingreso = {fmt(incomeCat*(g.pct/100))}/cat</div>}
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          <div style={{position:"relative",flex:1}}><span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:C.mid,pointerEvents:"none"}}>$</span><input type="number" min="0" value={dep} onChange={e=>setDep(e.target.value)} placeholder="Depositar" style={{width:"100%",paddingLeft:18,paddingRight:6,paddingTop:6,paddingBottom:6,background:C.s2,border:`1px solid ${C.borderHi}`,borderRadius:6,color:C.hi,fontFamily:"monospace",fontSize:12,textAlign:"right",outline:"none"}}/></div>
+          <button onClick={()=>{const a=parseFloat(dep);if(a)deposit(g.id,a);setDep("");}} style={{background:C.teal+"22",color:C.teal,border:`1px solid ${C.teal}44`,borderRadius:6,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>Depositar</button>
+        </div>
+      </div>;
+    })}
+  </Block>;
+}
+
+// ── CUENTAS ───────────────────────────────────────────────────────────────────
+function CuentasTab({totalFixed,totalExtra}){
   const [accounts,setAccounts]=useSynced("accounts",DEFAULT_ACCOUNTS);
   const debito=accounts.filter(a=>a.type==="debito");
   const credito=accounts.filter(a=>a.type==="credito");
@@ -156,74 +325,47 @@ function CuentasTab(){
   function upd(id,f,v){setAccounts(p=>p.map(a=>a.id===id?{...a,[f]:v}:a));}
   function add(type){setAccounts(p=>[...p,{id:uid(),name:"Nueva cuenta",type,balance:0,limit:0}]);}
   function del(id){setAccounts(p=>p.filter(a=>a.id!==id));}
+  // Neto real: dinero disponible menos lo que se debe en crédito menos gastos pendientes
+  const netoReal=totalDebito-totalCredito;
+  const disponibleTras=netoReal-totalFixed-totalExtra;
   return<div>
-    <Block label="Débito" total={totalDebito} totalColor={C.green} accent={C.green}
-      footer={<AddBtn label="Agregar cuenta débito" onClick={()=>add("debito")} color={C.green}/>}>
-      {debito.map(a=><TR key={a.id}>
-        <TxtIn value={a.name} onChange={v=>upd(a.id,"name",v)} placeholder="Nombre"/>
-        <MoneyInput value={a.balance} onChange={v=>upd(a.id,"balance",v)}/>
-        <XBtn onClick={()=>del(a.id)}/>
-      </TR>)}
+    <Block label="Débito" total={totalDebito} totalColor={C.green} accent={C.green} footer={<AddBtn label="Agregar débito" onClick={()=>add("debito")} color={C.green}/>}>
+      {debito.map(a=><TR key={a.id}><TI value={a.name} onChange={v=>upd(a.id,"name",v)} placeholder="Nombre"/><MI value={a.balance} onChange={v=>upd(a.id,"balance",v)}/><XBtn onClick={()=>del(a.id)}/></TR>)}
     </Block>
-    <Block label="Crédito" totalColor={C.pink} accent={C.pink}
-      footer={<AddBtn label="Agregar tarjeta crédito" onClick={()=>add("credito")} color={C.pink}/>}>
-      {/* col headers */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 100px 100px 24px",gap:6,padding:"6px 16px",borderBottom:`1px solid ${C.border}`}}>
+
+    <Block label="Crédito" totalColor={C.pink} accent={C.pink} footer={<AddBtn label="Agregar crédito" onClick={()=>add("credito")} color={C.pink}/>}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 95px 95px 24px",gap:6,padding:"6px 16px",borderBottom:`1px solid ${C.border}`}}>
         {["Tarjeta","Usado","Límite",""].map(h=><span key={h} style={{fontSize:10,color:C.lo,fontWeight:600,letterSpacing:.8,textTransform:"uppercase"}}>{h}</span>)}
       </div>
-      {credito.map(a=>{
-        const disp=(a.limit||0)-a.balance;
-        return<div key={a.id} style={{display:"grid",gridTemplateColumns:"1fr 100px 100px 24px",gap:6,alignItems:"center",padding:"9px 16px",borderBottom:`1px solid ${C.border}`}}>
-          <TxtIn value={a.name} onChange={v=>upd(a.id,"name",v)} placeholder="Nombre"/>
-          <MoneyInput value={a.balance} onChange={v=>upd(a.id,"balance",v)} width={92}/>
-          <MoneyInput value={a.limit} onChange={v=>upd(a.id,"limit",v)} width={92} placeholder="Límite"/>
-          <XBtn onClick={()=>del(a.id)}/>
-          {(a.limit||0)>0&&<div style={{gridColumn:"1/-1",fontSize:11,color:disp>=0?C.green:C.red,paddingTop:2}}>Disponible: {fmt(disp)}</div>}
-        </div>;
-      })}
+      {credito.map(a=>{const disp=(a.limit||0)-a.balance;return<div key={a.id} style={{display:"grid",gridTemplateColumns:"1fr 95px 95px 24px",gap:6,alignItems:"center",padding:"9px 16px",borderBottom:`1px solid ${C.border}`}}>
+        <TI value={a.name} onChange={v=>upd(a.id,"name",v)} placeholder="Nombre"/>
+        <MI value={a.balance} onChange={v=>upd(a.id,"balance",v)} width={87}/>
+        <MI value={a.limit} onChange={v=>upd(a.id,"limit",v)} width={87} ph="Límite"/>
+        <XBtn onClick={()=>del(a.id)}/>
+        {(a.limit||0)>0&&<div style={{gridColumn:"1/-1",fontSize:11,color:disp>=0?C.green:C.red,paddingTop:2}}>Disponible: {fmt(disp)}</div>}
+      </div>;})}
       <div style={{padding:"10px 16px",borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:6}}>
-        <span style={{fontSize:11,color:C.mid}}>Total usado: <b style={{color:C.pink,fontFamily:"'DM Mono',monospace"}}>{fmt(totalCredito)}</b></span>
-        {totalLimit>0&&<span style={{fontSize:11,color:C.mid}}>Disponible total: <b style={{color:dispCredito>=0?C.green:C.red,fontFamily:"'DM Mono',monospace"}}>{fmt(dispCredito)}</b></span>}
-        <span style={{fontSize:11,color:C.mid}}>Neto banco: <b style={{color:totalDebito-totalCredito>=0?C.green:C.red,fontFamily:"'DM Mono',monospace"}}>{fmt(totalDebito-totalCredito)}</b></span>
+        <span style={{fontSize:11,color:C.mid}}>Usado: <b style={{color:C.pink,fontFamily:"monospace"}}>{fmt(totalCredito)}</b></span>
+        {totalLimit>0&&<span style={{fontSize:11,color:C.mid}}>Disponible total: <b style={{color:dispCredito>=0?C.green:C.red,fontFamily:"monospace"}}>{fmt(dispCredito)}</b></span>}
       </div>
     </Block>
+
+    {/* Resumen real considerando gastos */}
+    <div style={{background:C.s1,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden"}}>
+      <div style={{padding:"10px 16px",borderBottom:`1px solid ${C.border}`}}><span style={{fontSize:10,fontWeight:700,letterSpacing:1.5,color:C.mid,textTransform:"uppercase"}}>Posición real</span></div>
+      {[
+        {l:"Total en débito",v:totalDebito,c:C.green},
+        {l:"Total en crédito (debes)",v:-totalCredito,c:C.pink},
+        {l:"Neto bancario",v:netoReal,c:netoReal>=0?C.green:C.red},
+        {l:"Menos gastos fijos del mes",v:-totalFixed,c:C.hi},
+        {l:"Menos esporádicos",v:-totalExtra,c:C.amber},
+      ].map(({l,v,c})=><div key={l} style={{display:"flex",justifyContent:"space-between",padding:"8px 16px",borderBottom:`1px solid ${C.border}`}}><span style={{color:C.mid,fontSize:12}}>{l}</span><span style={{fontFamily:"monospace",fontWeight:600,color:c}}>{fmt(v)}</span></div>)}
+      <div style={{display:"flex",justifyContent:"space-between",padding:"12px 16px"}}><span style={{fontWeight:700,color:C.hi}}>Disponible tras gastos</span><span style={{fontFamily:"monospace",fontSize:16,fontWeight:700,color:disponibleTras>=0?C.accent:C.red}}>{fmt(disponibleTras)}</span></div>
+    </div>
   </div>;
 }
 
-// ── GASTOS ────────────────────────────────────────────────────────────────────
-function GastosTab({extras,setExtras,cats,setCats}){
-  const [name,setName]=useState("");const [where,setWhere]=useState("");const [cat,setCat]=useState(cats[0]||"Otro");const [amount,setAmount]=useState("");
-  function commit(){
-    const a=parseFloat(amount);if(!name.trim()||!a)return;
-    if(!cats.includes(cat))setCats(p=>[...p,cat]);
-    setExtras(p=>[...p,{id:uid(),name:name.trim(),where:where.trim(),cat,amount:a,date:new Date().toISOString().slice(0,10)}]);
-    setName("");setWhere("");setAmount("");
-  }
-  const total=extras.reduce((s,r)=>s+r.amount,0);
-  const inp={background:C.s2,border:`1px solid ${C.borderHi}`,borderRadius:7,color:C.hi,padding:"8px 10px",fontFamily:"inherit",outline:"none",width:"100%"};
-  return<Block label="Gastos esporádicos" total={total} totalColor={C.amber} accent={C.amber}>
-    <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",flexDirection:"column",gap:8}}>
-      <div style={{display:"flex",gap:8}}><input value={name} onChange={e=>setName(e.target.value)} placeholder="¿Qué?" onKeyDown={e=>e.key==="Enter"&&commit()} style={{...inp,flex:2}}/><input value={where} onChange={e=>setWhere(e.target.value)} placeholder="¿Dónde?" onKeyDown={e=>e.key==="Enter"&&commit()} style={{...inp,flex:1}}/></div>
-      <div style={{display:"flex",gap:8,alignItems:"center"}}>
-        <CatSelect value={cat} onChange={setCat} cats={cats}/>
-        <div style={{position:"relative",flexShrink:0}}><span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:C.mid,pointerEvents:"none"}}>$</span><input type="number" min="0" value={amount} placeholder="0" onChange={e=>setAmount(e.target.value)} onKeyDown={e=>e.key==="Enter"&&commit()} style={{width:100,paddingLeft:18,paddingRight:6,paddingTop:8,paddingBottom:8,background:C.s2,border:`1px solid ${C.borderHi}`,borderRadius:7,color:C.hi,fontFamily:"'DM Mono',monospace",textAlign:"right",outline:"none"}}/></div>
-        <button onClick={commit} style={{background:C.amber,color:C.bg,border:"none",borderRadius:7,padding:"8px 16px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>+</button>
-      </div>
-    </div>
-    {extras.length===0&&<div style={{padding:"12px 16px",color:C.lo,fontStyle:"italic"}}>Sin gastos registrados</div>}
-    {extras.length>0&&<div style={{overflowY:"auto",maxHeight:300}}>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 80px 80px 24px",gap:6,padding:"6px 16px",borderBottom:`1px solid ${C.border}`}}>{["Concepto","Cat.","Monto",""].map(h=><span key={h} style={{fontSize:10,color:C.lo,fontWeight:600,letterSpacing:.8,textTransform:"uppercase"}}>{h}</span>)}</div>
-      {extras.map(r=><div key={r.id} style={{display:"grid",gridTemplateColumns:"1fr 80px 80px 24px",gap:6,alignItems:"center",padding:"7px 16px",borderBottom:`1px solid ${C.border}`,transition:"background .1s"}} onMouseEnter={e=>e.currentTarget.style.background=C.s2} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-        <div><div style={{color:C.hi,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:13}}>{r.name}</div>{r.where&&<div style={{color:C.lo,fontSize:11}}>{r.where}{r.date?` · ${r.date}`:""}</div>}</div>
-        <span style={{fontSize:11,color:C.mid,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.cat}</span>
-        <span style={{fontFamily:"'DM Mono',monospace",color:C.amber,textAlign:"right"}}>{fmt(r.amount)}</span>
-        <XBtn onClick={()=>setExtras(p=>p.filter(x=>x.id!==r.id))}/>
-      </div>)}
-    </div>}
-  </Block>;
-}
-
-// ── DEUDAS — FIX 4: plan de liquidación catorcenal ───────────────────────────
+// ── DEUDAS ────────────────────────────────────────────────────────────────────
 function DeudasTab({totalIncome}){
   const [debts,setDebts]=useSynced("debts",[]);
   const [name,setName]=useState("");const [total,setTotal]=useState("");const [monthly,setMonthly]=useState("");const [note,setNote]=useState("");
@@ -232,47 +374,45 @@ function DeudasTab({totalIncome}){
   function del(id){setDebts(p=>p.filter(d=>d.id!==id));}
   function tog(id){setDebts(p=>p.map(d=>d.id===id?{...d,active:!d.active}:d));}
   const incomeCat=totalIncome/2;
+  const totalDebt=debts.filter(d=>d.active).reduce((s,d)=>s+(d.total-d.paid),0);
   const inp={background:C.s2,border:`1px solid ${C.borderHi}`,borderRadius:7,color:C.hi,padding:"8px 10px",fontFamily:"inherit",outline:"none",width:"100%"};
-  return<Block label="Deudas" totalColor={C.pink} accent={C.pink} footer={<AddBtn label="Agregar deuda / cargo único" onClick={add} color={C.pink}/>}>
+  return<Block label="Deudas y cargos" total={totalDebt} totalColor={C.pink} accent={C.pink} footer={<AddBtn label="Agregar deuda / cargo" onClick={add} color={C.pink}/>}>
     <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",flexDirection:"column",gap:8}}>
       <input value={name} onChange={e=>setName(e.target.value)} placeholder="Concepto (ej. Brenda, UVEG, Dentista)" style={inp}/>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
         <div style={{flex:1,minWidth:100,position:"relative"}}><span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:C.mid,pointerEvents:"none"}}>$</span><input type="number" min="0" value={total} onChange={e=>setTotal(e.target.value)} placeholder="Monto total" style={{...inp,paddingLeft:18,textAlign:"right"}}/></div>
         <div style={{flex:1,minWidth:100,position:"relative"}}><span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:C.mid,pointerEvents:"none"}}>$</span><input type="number" min="0" value={monthly} onChange={e=>setMonthly(e.target.value)} placeholder="Abono/mes (opt.)" style={{...inp,paddingLeft:18,textAlign:"right"}}/></div>
       </div>
-      <input value={note} onChange={e=>setNote(e.target.value)} placeholder="Nota (opcional)" style={{...inp,color:C.mid,border:`1px solid ${C.border}`}}/>
+      <input value={note} onChange={e=>setNote(e.target.value)} placeholder="Nota" style={{...inp,color:C.mid,border:`1px solid ${C.border}`}}/>
     </div>
-    {debts.length===0&&<div style={{padding:"12px 16px",color:C.lo,fontStyle:"italic"}}>Sin deudas registradas</div>}
+    {debts.length===0&&<div style={{padding:"12px 16px",color:C.lo,fontStyle:"italic",fontSize:12}}>Sin deudas registradas</div>}
     {debts.map(d=>{
       const remaining=d.total-d.paid;
       const pct=d.total>0?Math.min(100,(d.paid/d.total)*100):0;
       const [payAmt,setPayAmt]=useState("");
-      const [catorcenas,setCatorcenas]=useState("");
-      // FIX 4: plan catorcenal — cuánto abonar por catorcena para liquidar en N catorcenas
-      const catN=parseInt(catorcenas)||0;
-      const abonoSugerido=catN>0&&remaining>0?remaining/catN:0;
+      const [catN,setCatN]=useState("");
+      const cN=parseInt(catN)||0;
+      const abonoSug=cN>0&&remaining>0?remaining/cN:0;
       const catorcenasNec=d.monthly>0&&remaining>0?Math.ceil(remaining/(d.monthly/2)):0;
       return<div key={d.id} style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,opacity:d.active?1:.4}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,flexWrap:"wrap",gap:6}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}><Toggle on={d.active} onChange={()=>tog(d.id)}/><span style={{color:C.hi,fontWeight:600,fontSize:13}}>{d.name}</span>{d.note&&<span style={{fontSize:11,color:C.lo}}>{d.note}</span>}</div>
           <div style={{display:"flex",gap:6,alignItems:"center"}}>{d.monthly>0&&<Badge label={`${fmt(d.monthly)}/mes`} color={C.pink}/>}<XBtn onClick={()=>del(d.id)}/></div>
         </div>
-        <div style={{height:4,background:C.border,borderRadius:99,marginBottom:6}}><div style={{height:"100%",width:`${pct}%`,borderRadius:99,background:remaining<=0?C.green:C.pink,transition:"width .4s"}}/></div>
+        <div style={{height:4,background:C.border,borderRadius:99,marginBottom:5}}><div style={{height:"100%",width:`${pct}%`,borderRadius:99,background:remaining<=0?C.green:C.pink,transition:"width .4s"}}/></div>
         <div style={{fontSize:11,color:C.mid,marginBottom:8}}>{fmt(d.paid)} pagado · {fmt(remaining)} pendiente · {pct.toFixed(0)}%</div>
-        {/* FIX 4: plan catorcenal */}
         {remaining>0&&<div style={{background:C.s2,borderRadius:8,padding:"8px 12px",marginBottom:8}}>
-          <div style={{fontSize:10,color:C.lo,letterSpacing:.8,textTransform:"uppercase",marginBottom:6,fontWeight:600}}>Plan de liquidación catorcenal</div>
-          {d.monthly>0&&<div style={{fontSize:11,color:C.mid,marginBottom:4}}>Con abono actual ({fmt(d.monthly/2)}/cat): liquidar en <b style={{color:C.pink}}>{catorcenasNec} catorcenas</b> (~{(catorcenasNec/2).toFixed(1)} meses)</div>}
+          <div style={{fontSize:10,color:C.lo,letterSpacing:.8,textTransform:"uppercase",marginBottom:6,fontWeight:600}}>Plan de pago catorcenal</div>
+          {d.monthly>0&&<div style={{fontSize:11,color:C.mid,marginBottom:4}}>Con {fmt(d.monthly/2)}/cat actuales → <b style={{color:C.pink}}>{catorcenasNec} catorcenas</b> (~{(catorcenasNec/2).toFixed(1)} meses)</div>}
           <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
             <span style={{fontSize:11,color:C.mid,flexShrink:0}}>Liquidar en</span>
-            <NumIn value={catorcenas} onChange={v=>setCatorcenas(v)} width={60}/>
+            <NI value={catN} onChange={v=>setCatN(v)} width={60}/>
             <span style={{fontSize:11,color:C.mid,flexShrink:0}}>catorcenas →</span>
-            {abonoSugerido>0&&<Badge label={`${fmt(abonoSugerido)}/cat`} color={C.teal}/>}
-            {abonoSugerido>0&&incomeCat>0&&<Badge label={`${((abonoSugerido/incomeCat)*100).toFixed(1)}% del ingreso`} color={C.mid}/>}
+            {abonoSug>0&&<><Badge label={`${fmt(abonoSug)}/cat`} color={C.teal}/>{incomeCat>0&&<Badge label={`${((abonoSug/incomeCat)*100).toFixed(1)}% ingreso`} color={C.mid}/>}</>}
           </div>
         </div>}
         {remaining>0&&<div style={{display:"flex",gap:6,alignItems:"center"}}>
-          <div style={{position:"relative",flex:1}}><span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:10,color:C.mid,pointerEvents:"none"}}>$</span><input type="number" min="0" value={payAmt} onChange={e=>setPayAmt(e.target.value)} placeholder="Abonar" style={{width:"100%",paddingLeft:18,paddingRight:6,paddingTop:6,paddingBottom:6,background:C.s2,border:`1px solid ${C.borderHi}`,borderRadius:6,color:C.hi,fontFamily:"'DM Mono',monospace",fontSize:12,textAlign:"right",outline:"none"}}/></div>
+          <div style={{position:"relative",flex:1}}><span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:10,color:C.mid,pointerEvents:"none"}}>$</span><input type="number" min="0" value={payAmt} onChange={e=>setPayAmt(e.target.value)} placeholder="Abonar" style={{width:"100%",paddingLeft:18,paddingRight:6,paddingTop:6,paddingBottom:6,background:C.s2,border:`1px solid ${C.borderHi}`,borderRadius:6,color:C.hi,fontFamily:"monospace",fontSize:12,textAlign:"right",outline:"none"}}/></div>
           <button onClick={()=>{const a=parseFloat(payAmt);if(a)pay(d.id,a);setPayAmt("");}} style={{background:C.pink+"22",color:C.pink,border:`1px solid ${C.pink}44`,borderRadius:6,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>Abonar</button>
         </div>}
         {remaining<=0&&<Badge label="✓ Liquidada" color={C.green}/>}
@@ -281,135 +421,102 @@ function DeudasTab({totalIncome}){
   </Block>;
 }
 
-// ── AHORRO — FIX 4b: plan catorcenal en ahorro ───────────────────────────────
-function AhorroTab({totalIncome}){
-  const [goals,setGoals]=useSynced("saving_goals",[]);
-  const [name,setName]=useState("");const [target,setTarget]=useState("");const [pct,setPct]=useState("");const [months,setMonths]=useState("");
-  function add(){if(!name.trim())return;setGoals(p=>[...p,{id:uid(),name:name.trim(),target:parseFloat(target)||0,pct:parseFloat(pct)||0,months:parseInt(months)||0,saved:0}]);setName("");setTarget("");setPct("");setMonths("");}
-  function deposit(id,amt){setGoals(p=>p.map(g=>g.id===id?{...g,saved:(g.saved||0)+amt}:g));}
-  function del(id){setGoals(p=>p.filter(g=>g.id!==id));}
-  const incomeCat=totalIncome/2;
-  const inp={background:C.s2,border:`1px solid ${C.borderHi}`,borderRadius:7,color:C.hi,padding:"8px 10px",fontFamily:"inherit",outline:"none",width:"100%"};
-  return<Block label="Objetivos de ahorro" accent={C.teal} footer={<AddBtn label="Nuevo objetivo" onClick={add} color={C.teal}/>}>
-    <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",flexDirection:"column",gap:8}}>
-      <input value={name} onChange={e=>setName(e.target.value)} placeholder="Nombre (ej. Vacaciones, Emergencia)" style={inp}/>
-      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <div style={{flex:1,minWidth:90,position:"relative"}}><span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:C.mid,pointerEvents:"none"}}>$</span><input type="number" min="0" value={target} onChange={e=>setTarget(e.target.value)} placeholder="Meta $" style={{...inp,paddingLeft:18,textAlign:"right"}}/></div>
-        <div style={{flex:1,minWidth:80,position:"relative"}}><span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:C.mid,pointerEvents:"none"}}>%</span><input type="number" min="0" max="100" value={pct} onChange={e=>setPct(e.target.value)} placeholder="% ingreso" style={{...inp,paddingRight:24,textAlign:"right"}}/></div>
-        <div style={{flex:1,minWidth:80}}><input type="number" min="1" value={months} onChange={e=>setMonths(e.target.value)} placeholder="En # meses" style={{...inp,textAlign:"right"}}/></div>
-      </div>
-    </div>
-    {goals.length===0&&<div style={{padding:"12px 16px",color:C.lo,fontStyle:"italic"}}>Sin objetivos de ahorro</div>}
-    {goals.map(g=>{
-      const catAmt=Math.max(incomeCat*(g.pct/100),(g.target&&g.months?g.target/(g.months*2):0));
-      const catorcesNeeded=g.target&&catAmt>0?Math.ceil(g.target/catAmt):0;
-      const pct2=g.target>0?Math.min(100,((g.saved||0)/g.target)*100):0;
-      const [dep,setDep]=useState("");
-      const [customCat,setCustomCat]=useState("");
-      const customCatN=parseInt(customCat)||0;
-      const customAmt=customCatN>0&&g.target>0?Math.max(0,g.target-(g.saved||0))/customCatN:0;
-      return<div key={g.id} style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-          <span style={{color:C.hi,fontWeight:600}}>{g.name}</span>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>{catAmt>0&&<Badge label={`${fmt(catAmt)}/cat`} color={C.teal}/>}<XBtn onClick={()=>del(g.id)}/></div>
-        </div>
-        {g.target>0&&<><div style={{height:4,background:C.border,borderRadius:99,marginBottom:6}}><div style={{height:"100%",width:`${pct2}%`,borderRadius:99,background:C.teal,transition:"width .4s"}}/></div>
-          <div style={{fontSize:11,color:C.mid,marginBottom:6}}>{fmt(g.saved||0)} / {fmt(g.target)} · {pct2.toFixed(0)}%</div></>}
-        {/* plan catorcenal */}
-        {g.target>0&&<div style={{background:C.s2,borderRadius:8,padding:"8px 12px",marginBottom:8}}>
-          <div style={{fontSize:10,color:C.lo,letterSpacing:.8,textTransform:"uppercase",marginBottom:6,fontWeight:600}}>Plan catorcenal</div>
-          {catorcesNeeded>0&&<div style={{fontSize:11,color:C.teal,marginBottom:4}}>Automático: {fmt(catAmt)}/cat × {catorcesNeeded} catorcenas (~{(catorcesNeeded/2).toFixed(1)} meses)</div>}
-          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-            <span style={{fontSize:11,color:C.mid,flexShrink:0}}>Lograr en</span>
-            <NumIn value={customCat} onChange={v=>setCustomCat(v)} width={60}/>
-            <span style={{fontSize:11,color:C.mid,flexShrink:0}}>catorcenas →</span>
-            {customAmt>0&&<Badge label={`${fmt(customAmt)}/cat`} color={C.accent}/>}
-            {customAmt>0&&incomeCat>0&&<Badge label={`${((customAmt/incomeCat)*100).toFixed(1)}% del ingreso`} color={C.mid}/>}
-          </div>
-        </div>}
-        {g.pct>0&&<div style={{fontSize:11,color:C.mid,marginBottom:6}}>{g.pct}% de ingresos = {fmt(incomeCat*(g.pct/100))}/cat</div>}
-        <div style={{display:"flex",gap:6,alignItems:"center"}}>
-          <div style={{position:"relative",flex:1}}><span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:C.mid,pointerEvents:"none"}}>$</span><input type="number" min="0" value={dep} onChange={e=>setDep(e.target.value)} placeholder="Depositar" style={{width:"100%",paddingLeft:18,paddingRight:6,paddingTop:6,paddingBottom:6,background:C.s2,border:`1px solid ${C.borderHi}`,borderRadius:6,color:C.hi,fontFamily:"'DM Mono',monospace",fontSize:12,textAlign:"right",outline:"none"}}/></div>
-          <button onClick={()=>{const a=parseFloat(dep);if(a)deposit(g.id,a);setDep("");}} style={{background:C.teal+"22",color:C.teal,border:`1px solid ${C.teal}44`,borderRadius:6,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>Depositar</button>
-        </div>
-      </div>;
-    })}
-  </Block>;
-}
-
-// ── TRANSPORTE — FIX 5: desglose normal vs transbordo ─────────────────────────
+// ── TRANSPORTE ────────────────────────────────────────────────────────────────
+// Esquema: 4 camiones/día, 2 normales + 2 con transbordo
+// Normal: $11 c/u → $22 total normales
+// Con transbordo: $11 + $5.50 = $16.50 c/u → $33 total con transbordo
+// Total día: $22 + $33 = $55
 function TransporteTab(){
-  const [cfg,setCfg]=useSynced("camiones_config2",{costoBase:11,transbordo:5.50,normales:2,transbordos:2,extra:0});
+  const [cfg,setCfg]=useSynced("camiones_config3",{costoBase:11,transbordo:5.50,normales:2,conTransbordo:2,extra:0});
   const [fechas,setFechas]=useSynced("camiones_fechas",{inicio:"",fin:""});
   const [periodo,setPeriodo]=useState("catorcena");
   const periodos={semana:5,catorcena:10,quincena:12,mes:22};
   const diasHabiles=useMemo(()=>{if(!fechas.inicio||!fechas.fin)return 0;let cur=new Date(fechas.inicio+"T12:00:00"),end=new Date(fechas.fin+"T12:00:00"),n=0;while(cur<=end){if(cur.getDay()!==0&&cur.getDay()!==6)n++;cur.setDate(cur.getDate()+1);}return n;},[fechas]);
   const dias=fechas.inicio&&fechas.fin?diasHabiles:periodos[periodo];
-  // FIX 5: separate normal and transbordo counts
-  const totalViajesDia=cfg.normales+cfg.transbordos;
-  const costoDia=(cfg.normales*cfg.costoBase)+(cfg.transbordos*(cfg.costoBase+cfg.transbordo));
+
+  // Cost per day: normales × costoBase + conTransbordo × (costoBase + transbordo)
+  const costoNormalesDia=cfg.normales*cfg.costoBase;
+  const costoTransbordosDia=cfg.conTransbordo*(cfg.costoBase+cfg.transbordo);
+  const costoDia=costoNormalesDia+costoTransbordosDia;
   const costoTotal=dias*costoDia+(cfg.extra||0)*cfg.costoBase;
-  const viajesTotal=dias*totalViajesDia+(cfg.extra||0);
-  const inp={background:C.s2,border:`1px solid ${C.border}`,borderRadius:7,color:C.hi,padding:"7px 10px",fontFamily:"'DM Mono',monospace",outline:"none"};
+  const viajesTotal=(cfg.normales+cfg.conTransbordo)*dias+(cfg.extra||0);
+
+  const inp={background:C.s2,border:`1px solid ${C.border}`,borderRadius:7,color:C.hi,padding:"7px 10px",fontFamily:"monospace",outline:"none"};
   return<Block label="Calculadora de transporte" accent={C.blue}>
     <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`}}>
       <div style={{fontSize:10,color:C.lo,letterSpacing:.8,textTransform:"uppercase",marginBottom:10,fontWeight:600}}>Tarifas</div>
-      {[{l:"Costo camión normal",k:"costoBase",step:0.5},{l:"Costo transbordo (extra)",k:"transbordo",step:0.5}].map(({l,k,step})=><div key={k} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-        <span style={{flex:1,fontSize:12,color:C.mid}}>{l}</span>
-        <div style={{position:"relative",flexShrink:0}}><span style={{position:"absolute",left:7,top:"50%",transform:"translateY(-50%)",fontSize:11,color:C.mid,pointerEvents:"none"}}>$</span><input type="number" min="0" step={step} value={cfg[k]} onChange={e=>setCfg(p=>({...p,[k]:parseFloat(e.target.value)||0}))} style={{...inp,width:90,paddingLeft:18,textAlign:"right"}}/></div>
-      </div>)}
-      <div style={{height:1,background:C.border,margin:"10px 0"}}/>
-      <div style={{fontSize:10,color:C.lo,letterSpacing:.8,textTransform:"uppercase",marginBottom:10,fontWeight:600}}>Viajes diarios — total: {totalViajesDia} camiones/día</div>
-      {/* FIX 5: normales y transbordos separados */}
-      <div style={{background:C.s2,borderRadius:10,padding:"10px 12px",marginBottom:8}}>
-        <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
-          <div style={{flex:1,minWidth:120}}>
-            <div style={{fontSize:10,color:C.lo,marginBottom:6}}>Camiones normales (ida+vuelta)</div>
+      <div style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
+        <span style={{flex:1,fontSize:12,color:C.mid}}>Costo camión</span>
+        <div style={{position:"relative",flexShrink:0}}><span style={{position:"absolute",left:7,top:"50%",transform:"translateY(-50%)",fontSize:11,color:C.mid,pointerEvents:"none"}}>$</span><input type="number" min="0" step="0.5" value={cfg.costoBase} onChange={e=>setCfg(p=>({...p,costoBase:parseFloat(e.target.value)||0}))} style={{...inp,width:90,paddingLeft:18,textAlign:"right"}}/></div>
+      </div>
+      <div style={{display:"flex",gap:8,marginBottom:4,alignItems:"center"}}>
+        <span style={{flex:1,fontSize:12,color:C.mid}}>Costo transbordo</span>
+        <div style={{position:"relative",flexShrink:0}}><span style={{position:"absolute",left:7,top:"50%",transform:"translateY(-50%)",fontSize:11,color:C.mid,pointerEvents:"none"}}>$</span><input type="number" min="0" step="0.5" value={cfg.transbordo} onChange={e=>setCfg(p=>({...p,transbordo:parseFloat(e.target.value)||0}))} style={{...inp,width:90,paddingLeft:18,textAlign:"right"}}/></div>
+      </div>
+
+      <div style={{height:1,background:C.border,margin:"12px 0"}}/>
+      <div style={{fontSize:10,color:C.lo,letterSpacing:.8,textTransform:"uppercase",marginBottom:10,fontWeight:600}}>Viajes diarios</div>
+
+      <div style={{background:C.s2,borderRadius:10,padding:"12px"}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+          <div>
+            <div style={{fontSize:11,color:C.mid,marginBottom:6}}>Camiones normales</div>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <NumIn value={cfg.normales} onChange={v=>setCfg(p=>({...p,normales:v}))} width={60}/>
-              <span style={{fontSize:11,color:C.mid}}>× {fmtD(cfg.costoBase)} = <b style={{color:C.hi}}>{fmtD(cfg.normales*cfg.costoBase)}</b>/día</span>
+              <NI value={cfg.normales} onChange={v=>setCfg(p=>({...p,normales:v}))} width={55}/>
+              <span style={{fontSize:11,color:C.lo}}>× {fmtD(cfg.costoBase)}</span>
             </div>
+            <div style={{fontSize:12,color:C.hi,fontFamily:"monospace",marginTop:4}}><b>= {fmtD(costoNormalesDia)}/día</b></div>
           </div>
-          <div style={{flex:1,minWidth:140}}>
-            <div style={{fontSize:10,color:C.lo,marginBottom:6}}>Con transbordo (camión + transbordo)</div>
+          <div>
+            <div style={{fontSize:11,color:C.mid,marginBottom:6}}>Con transbordo</div>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <NumIn value={cfg.transbordos} onChange={v=>setCfg(p=>({...p,transbordos:v}))} width={60}/>
-              <span style={{fontSize:11,color:C.mid}}>× {fmtD(cfg.costoBase+cfg.transbordo)} = <b style={{color:C.hi}}>{fmtD(cfg.transbordos*(cfg.costoBase+cfg.transbordo))}</b>/día</span>
+              <NI value={cfg.conTransbordo} onChange={v=>setCfg(p=>({...p,conTransbordo:v}))} width={55}/>
+              <span style={{fontSize:11,color:C.lo}}>× {fmtD(cfg.costoBase+cfg.transbordo)}</span>
             </div>
+            <div style={{fontSize:12,color:C.hi,fontFamily:"monospace",marginTop:4}}><b>= {fmtD(costoTransbordosDia)}/día</b></div>
           </div>
         </div>
-        <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${C.border}`,fontSize:11,color:C.mid}}>
-          Costo total/día: <b style={{color:C.accent,fontFamily:"'DM Mono',monospace"}}>{fmtD(costoDia)}</b>
+        <div style={{borderTop:`1px solid ${C.border}`,paddingTop:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontSize:12,color:C.mid}}>{cfg.normales+cfg.conTransbordo} camiones/día — total</span>
+          <span style={{fontFamily:"monospace",fontWeight:700,fontSize:15,color:C.accent}}>{fmtD(costoDia)}/día</span>
+        </div>
+        <div style={{marginTop:6,fontSize:11,color:C.lo}}>
+          ({cfg.normales}×{fmtD(cfg.costoBase)}) + ({cfg.conTransbordo}×{fmtD(cfg.costoBase+cfg.transbordo)}) = {fmtD(costoDia)}
         </div>
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginTop:4}}>
+
+      <div style={{display:"flex",gap:8,alignItems:"center",marginTop:10}}>
         <span style={{flex:1,fontSize:12,color:C.mid}}>Viajes extra ocasionales</span>
-        <NumIn value={cfg.extra} onChange={v=>setCfg(p=>({...p,extra:v}))} width={60}/>
+        <NI value={cfg.extra} onChange={v=>setCfg(p=>({...p,extra:v}))} width={55}/>
         <span style={{fontSize:11,color:C.lo}}>× {fmtD(cfg.costoBase)}</span>
       </div>
     </div>
+
     <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`}}>
       <div style={{fontSize:10,color:C.lo,letterSpacing:.8,textTransform:"uppercase",marginBottom:8,fontWeight:600}}>Período</div>
       <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>{Object.keys(periodos).map(p=><button key={p} onClick={()=>{setPeriodo(p);setFechas({inicio:"",fin:""}); }} style={{padding:"5px 12px",borderRadius:7,border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600,background:periodo===p&&!fechas.inicio?C.blue+"22":"transparent",color:periodo===p&&!fechas.inicio?C.blue:C.lo,outline:periodo===p&&!fechas.inicio?`1px solid ${C.blue}44`:"none"}}>{p.charAt(0).toUpperCase()+p.slice(1)}</button>)}</div>
-      <div style={{fontSize:11,color:C.mid,marginBottom:6}}>O elige fechas (L-V):</div>
-      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{[{l:"Inicio",k:"inicio"},{l:"Fin",k:"fin"}].map(({l,k})=><div key={k} style={{flex:1,minWidth:120}}><div style={{fontSize:10,color:C.lo,marginBottom:4}}>{l}</div><input type="date" value={fechas[k]} onChange={e=>setFechas(p=>({...p,[k]:e.target.value}))} style={{...inp,width:"100%",colorScheme:"dark"}}/></div>)}</div>
+      <div style={{fontSize:11,color:C.mid,marginBottom:6}}>O elige fechas (excluye fines de semana):</div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{[{l:"Inicio",k:"inicio"},{l:"Fin",k:"fin"}].map(({l,k})=><div key={k} style={{flex:1,minWidth:120}}><div style={{fontSize:10,color:C.lo,marginBottom:4}}>{l}</div><input type="date" value={fechas[k]} onChange={e=>setFechas(p=>({...p,[k]:e.target.value}))} style={{...inp,width:"100%"}}/></div>)}</div>
     </div>
+
     <div style={{padding:"14px 16px"}}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        {[{l:"Costo/día",v:fmtD(costoDia),c:C.hi},{l:"Días",v:`${dias} días`,c:C.mid},{l:"Total viajes",v:`${viajesTotal}`,c:C.blue},{l:"Costo del período",v:fmtD(costoTotal),c:C.accent}].map(s=><div key={s.l} style={{background:C.s2,borderRadius:10,padding:"10px 12px"}}><div style={{fontSize:10,color:C.lo,marginBottom:4}}>{s.l}</div><div style={{fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:14,color:s.c}}>{s.v}</div></div>)}
+        {[{l:"Costo/día",v:fmtD(costoDia),c:C.hi},{l:"Días calculados",v:`${dias} días`,c:C.mid},{l:"Total viajes",v:`${viajesTotal} viajes`,c:C.blue},{l:"Costo del período",v:fmtD(costoTotal),c:C.accent}].map(s=><div key={s.l} style={{background:C.s2,borderRadius:10,padding:"10px 12px"}}><div style={{fontSize:10,color:C.lo,marginBottom:4}}>{s.l}</div><div style={{fontFamily:"monospace",fontWeight:700,fontSize:14,color:s.c}}>{s.v}</div></div>)}
       </div>
     </div>
   </Block>;
 }
 
 // ── WISHLIST ──────────────────────────────────────────────────────────────────
-function WishlistTab(){
+function WishlistTab({totalIncome}){
   const [items,setItems]=useSynced("wish_items",[]);
   const [name,setName]=useState("");const [price,setPrice]=useState("");const [prio,setPrio]=useState("media");const [url,setUrl]=useState("");const [cat,setCat]=useState("General");
-  const cats=["General","Ropa","Tecnología","Hogar","Salud","Otro"];
-  function add(){if(!name.trim())return;setItems(p=>[...p,{id:uid(),name:name.trim(),price:parseFloat(price)||0,prio,url:url.trim(),cat,bought:false}]);setName("");setPrice("");setUrl("");}
+  const incomeCat=totalIncome/2;
+  const wCats=["General","Ropa","Tecnología","Hogar","Salud","Otro"];
+  function add(){if(!name.trim())return;setItems(p=>[...p,{id:uid(),name:name.trim(),price:parseFloat(price)||0,prio,url:url.trim(),cat,bought:false,catPlan:0}]);setName("");setPrice("");setUrl("");}
   function tog(id){setItems(p=>p.map(r=>r.id===id?{...r,bought:!r.bought}:r));}
   function del(id){setItems(p=>p.filter(r=>r.id!==id));}
+  function updPlan(id,v){setItems(p=>p.map(r=>r.id===id?{...r,catPlan:parseInt(v)||0}:r));}
   const prioColor=id=>PRIO.find(p=>p.id===id)?.color||C.mid;
   const sorted=[...items].sort((a,b)=>(a.bought===b.bought)?({alta:0,media:1,baja:2}[a.prio]-{alta:0,media:1,baja:2}[b.prio]):(a.bought?1:-1));
   const total=items.filter(r=>!r.bought).reduce((s,r)=>s+r.price,0);
@@ -418,54 +525,48 @@ function WishlistTab(){
     <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",flexDirection:"column",gap:8}}>
       <input value={name} onChange={e=>setName(e.target.value)} placeholder="¿Qué quieres?" onKeyDown={e=>e.key==="Enter"&&add()} style={inp}/>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <div style={{position:"relative",flex:1,minWidth:100}}><span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:C.mid,pointerEvents:"none"}}>$</span><input type="number" min="0" value={price} onChange={e=>setPrice(e.target.value)} placeholder="Precio est." onKeyDown={e=>e.key==="Enter"&&add()} style={{...inp,paddingLeft:18,textAlign:"right"}}/></div>
+        <div style={{position:"relative",flex:1,minWidth:90}}><span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:C.mid,pointerEvents:"none"}}>$</span><input type="number" min="0" value={price} onChange={e=>setPrice(e.target.value)} placeholder="Precio" onKeyDown={e=>e.key==="Enter"&&add()} style={{...inp,paddingLeft:18,textAlign:"right"}}/></div>
         <select value={prio} onChange={e=>setPrio(e.target.value)} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:7,color:C.mid,padding:"8px 6px",fontFamily:"inherit",outline:"none",flexShrink:0}}>{PRIO.map(o=><option key={o.id} value={o.id}>{o.label}</option>)}</select>
-        <select value={cat} onChange={e=>setCat(e.target.value)} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:7,color:C.mid,padding:"8px 6px",fontFamily:"inherit",outline:"none",flexShrink:0}}>{cats.map(c=><option key={c}>{c}</option>)}</select>
+        <select value={cat} onChange={e=>setCat(e.target.value)} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:7,color:C.mid,padding:"8px 6px",fontFamily:"inherit",outline:"none",flexShrink:0}}>{wCats.map(c=><option key={c}>{c}</option>)}</select>
       </div>
       <input value={url} onChange={e=>setUrl(e.target.value)} placeholder="Link (opcional)" style={{...inp,color:C.mid,border:`1px solid ${C.border}`}}/>
       <button onClick={add} style={{background:C.purple,color:C.bg,border:"none",borderRadius:7,padding:"9px",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Agregar</button>
     </div>
     {items.length===0&&<div style={{padding:"14px 16px",color:C.lo,fontStyle:"italic"}}>Tu wishlist está vacía</div>}
-    <div style={{overflowY:"auto",maxHeight:400}}>
-      {sorted.map(r=><div key={r.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 16px",borderBottom:`1px solid ${C.border}`,opacity:r.bought?0.4:1,transition:"opacity .2s,background .1s"}} onMouseEnter={e=>e.currentTarget.style.background=C.s2} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-        <button onClick={()=>tog(r.id)} style={{width:18,height:18,borderRadius:4,flexShrink:0,cursor:"pointer",marginTop:2,background:r.bought?C.green:"transparent",border:`1.5px solid ${r.bought?C.green:C.borderHi}`,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}}>{r.bought&&<span style={{fontSize:10,color:C.bg,fontWeight:900,lineHeight:1}}>✓</span>}</button>
-        <div style={{flex:1,minWidth:0}}><div style={{color:r.bought?C.lo:C.hi,textDecoration:r.bought?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</div><div style={{fontSize:11,color:C.lo}}>{r.cat}{r.url&&<> · <a href={r.url} target="_blank" rel="noopener noreferrer" style={{color:C.blue,textDecoration:"none"}}>↗ link</a></>}</div></div>
-        <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,flexShrink:0}}>{r.price>0&&<span style={{fontFamily:"'DM Mono',monospace",fontSize:12,color:r.bought?C.lo:C.purple}}>{fmt(r.price)}</span>}<Badge label={PRIO.find(p=>p.id===r.prio)?.label} color={prioColor(r.prio)}/></div>
-        <XBtn onClick={()=>del(r.id)}/>
-      </div>)}
+    <div style={{overflowY:"auto",maxHeight:500}}>
+      {sorted.map(r=>{
+        const catAmt=r.catPlan>0&&r.price>0?r.price/r.catPlan:0;
+        return<div key={r.id} style={{padding:"10px 16px",borderBottom:`1px solid ${C.border}`,opacity:r.bought?0.4:1,transition:"opacity .2s,background .1s"}} onMouseEnter={e=>e.currentTarget.style.background=C.s2} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+          <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+            <button onClick={()=>tog(r.id)} style={{width:18,height:18,borderRadius:4,flexShrink:0,cursor:"pointer",marginTop:2,background:r.bought?C.green:"transparent",border:`1.5px solid ${r.bought?C.green:C.borderHi}`,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}}>{r.bought&&<span style={{fontSize:10,color:C.bg,fontWeight:900,lineHeight:1}}>✓</span>}</button>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:r.bought?C.lo:C.hi,textDecoration:r.bought?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</div>
+              <div style={{fontSize:11,color:C.lo}}>{r.cat}{r.url&&<> · <a href={r.url} target="_blank" rel="noopener noreferrer" style={{color:C.blue,textDecoration:"none"}}>↗</a></>}</div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,flexShrink:0}}>
+              {r.price>0&&<span style={{fontFamily:"monospace",fontSize:12,color:r.bought?C.lo:C.purple}}>{fmt(r.price)}</span>}
+              <Badge label={PRIO.find(p=>p.id===r.prio)?.label} color={prioColor(r.prio)}/>
+            </div>
+            <XBtn onClick={()=>del(r.id)}/>
+          </div>
+          {/* Plan de ahorro para este item */}
+          {!r.bought&&r.price>0&&<div style={{marginTop:8,background:C.s2,borderRadius:8,padding:"8px 12px"}}>
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+              <span style={{fontSize:11,color:C.mid,flexShrink:0}}>Ahorrar en</span>
+              <NI value={r.catPlan} onChange={v=>updPlan(r.id,v)} width={55}/>
+              <span style={{fontSize:11,color:C.mid,flexShrink:0}}>catorcenas →</span>
+              {catAmt>0&&<><Badge label={`${fmt(catAmt)}/cat`} color={C.purple}/>{incomeCat>0&&<Badge label={`${((catAmt/incomeCat)*100).toFixed(1)}% ingreso`} color={C.mid}/>}</>}
+            </div>
+          </div>}
+        </div>;
+      })}
     </div>
   </Block>;
 }
 
-// ── RESUMEN ───────────────────────────────────────────────────────────────────
-function ResumenTab({totalIncome,totalFixed,totalExtra,totalSaving,totalDebt,incomes,setIncomes,fixed,setFixed,cats}){
-  const updI=(id,f,v)=>setIncomes(p=>p.map(r=>r.id===id?{...r,[f]:v}:r));
-  const updF=(id,f,v)=>setFixed(p=>p.map(r=>r.id===id?{...r,[f]:v}:r));
-  const bal=totalIncome-totalFixed-totalExtra-totalSaving-totalDebt;
-  return<div>
-    <Block label="Ingresos" total={totalIncome} totalColor={C.green} footer={<AddBtn label="Agregar fuente" onClick={()=>setIncomes(p=>[...p,{id:uid(),name:"Nuevo ingreso",amount:0}])}/>}>
-      {incomes.map(r=><TR key={r.id}><TxtIn value={r.name} onChange={v=>updI(r.id,"name",v)} placeholder="Fuente"/><MoneyInput value={r.amount} onChange={v=>updI(r.id,"amount",v)}/><XBtn onClick={()=>setIncomes(p=>p.filter(x=>x.id!==r.id))}/></TR>)}
-    </Block>
-    <Block label="Gastos fijos mensuales" total={totalFixed} footer={<AddBtn label="Agregar gasto fijo" onClick={()=>setFixed(p=>[...p,{id:uid(),name:"Nuevo gasto",cat:cats[0],amount:0,active:true}])}/>}>
-      {fixed.map(r=><TR key={r.id} dimmed={!r.active}>
-        <Toggle on={r.active} onChange={()=>setFixed(p=>p.map(x=>x.id===r.id?{...x,active:!x.active}:x))}/>
-        <TxtIn value={r.name} onChange={v=>updF(r.id,"name",v)} dimmed={!r.active}/>
-        <CatSelect value={r.cat} onChange={v=>updF(r.id,"cat",v)} cats={cats}/>
-        <MoneyInput value={r.amount} onChange={v=>updF(r.id,"amount",v)} dimmed={!r.active}/>
-        <XBtn onClick={()=>setFixed(p=>p.filter(x=>x.id!==r.id))}/>
-      </TR>)}
-    </Block>
-    <div style={{background:C.s1,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",marginBottom:14}}>
-      <div style={{padding:"10px 16px",borderBottom:`1px solid ${C.border}`}}><span style={{fontSize:10,fontWeight:700,letterSpacing:1.5,color:C.mid,textTransform:"uppercase"}}>Resumen mensual</span></div>
-      {[{l:"Ingresos",v:totalIncome,s:"+",c:C.green},{l:"Gastos fijos",v:totalFixed,s:"−",c:C.hi},{l:"Esporádicos",v:totalExtra,s:"−",c:C.amber},{l:"Ahorro",v:totalSaving,s:"−",c:C.teal},{l:"Deudas",v:totalDebt,s:"−",c:C.pink}].map(({l,v,s,c})=><div key={l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 16px",borderBottom:`1px solid ${C.border}`}}><span style={{color:C.mid,fontSize:13}}>{l}</span><span style={{fontFamily:"'DM Mono',monospace",fontWeight:600,color:c}}>{s} {fmt(v)}</span></div>)}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"13px 16px"}}><span style={{fontSize:14,fontWeight:700,color:C.hi}}>Balance</span><span style={{fontFamily:"'DM Mono',monospace",fontSize:20,fontWeight:700,color:bal>=0?C.accent:C.red}}>{fmt(bal)}</span></div>
-    </div>
-  </div>;
-}
-
 // ── MAIN ──────────────────────────────────────────────────────────────────────
 export default function App(){
-  const [tab,setTab]=useState(()=>lsGet("tab","resumen"));
+  const [tab,setTab]=useState("main");
   const [incomes,setIncomes,incSynced]=useSynced("incomes",[{id:1,name:"Sueldo / Nómina",amount:0}]);
   const [fixed,setFixed,fixSynced]=useSynced("fixed",DEFAULT_FIXED);
   const [extras,setExtras,extSynced]=useSynced("extras",[]);
@@ -474,35 +575,35 @@ export default function App(){
   const [cats,setCats]=useSynced("fixed_cats",DEFAULT_CATS);
   const [extraCats,setExtraCats]=useSynced("extra_cats",EXTRA_CATS_DEFAULT);
   const synced=incSynced&&fixSynced&&extSynced;
-  useEffect(()=>lsSet("tab",tab),[tab]);
+
   const totalIncome=useMemo(()=>incomes.reduce((s,r)=>s+r.amount,0),[incomes]);
   const totalFixed=useMemo(()=>fixed.filter(r=>r.active).reduce((s,r)=>s+r.amount,0),[fixed]);
   const totalExtra=useMemo(()=>extras.reduce((s,r)=>s+r.amount,0),[extras]);
   const incomeCat=totalIncome/2;
   const totalSaving=useMemo(()=>savingGoals.reduce((s,g)=>s+Math.max(incomeCat*(g.pct/100),(g.target&&g.months?g.target/g.months:0)),0),[savingGoals,incomeCat]);
   const totalDebt=useMemo(()=>debts.filter(d=>d.active).reduce((s,d)=>s+(d.monthly||0),0),[debts]);
-  return<div style={{background:C.bg,minHeight:"100vh",padding:"20px 14px",maxWidth:640,margin:"0 auto",fontFamily:"'Inter',system-ui,sans-serif",color:C.hi}}>
+
+  return<div style={{background:C.bg,minHeight:"100vh",padding:"16px 14px",maxWidth:640,margin:"0 auto",fontFamily:"system-ui,sans-serif",color:C.hi}}>
     <style>{`
-      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@500;600&display=swap');
-      *{box-sizing:border-box;margin:0;} html{-webkit-text-size-adjust:100%;} body{background:#0a0a0a;}
+      *{box-sizing:border-box;margin:0;}
       ::placeholder{color:#383838!important;}
       input:focus,select:focus{border-color:#e8ff47!important;outline:none;}
       input[type=number]::-webkit-inner-spin-button{display:none;}
-      input[type=date]{color-scheme:dark;}
       select option{background:#181818;}
-      ::-webkit-scrollbar{width:3px;background:#111;} ::-webkit-scrollbar-thumb{background:#2a2a2a;border-radius:99px;}
+      ::-webkit-scrollbar{width:3px;background:#111;}
+      ::-webkit-scrollbar-thumb{background:#2a2a2a;border-radius:99px;}
       a:hover{opacity:.75;}
     `}</style>
-    <div style={{marginBottom:14}}><h1 style={{fontSize:17,fontWeight:700,color:C.hi,letterSpacing:-.3,marginBottom:2}}>Life 2.0</h1><p style={{fontSize:11,color:C.lo}}>{synced?"☁ Sincronizado":"○ Conectando..."}</p></div>
+    <div style={{marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <div><h1 style={{fontSize:17,fontWeight:700,color:C.hi,letterSpacing:-.3,marginBottom:2}}>Life 2.0</h1></div>
+      <div style={{fontSize:10,color:synced?C.green:C.lo}}>{synced?"☁ sync":"○ ..."}</div>
+    </div>
     <Hero income={totalIncome} fixed={totalFixed} extra={totalExtra} saving={totalSaving} debt={totalDebt} synced={synced}/>
     <Tabs active={tab} onChange={setTab}/>
-    {tab==="resumen"&&<ResumenTab totalIncome={totalIncome} totalFixed={totalFixed} totalExtra={totalExtra} totalSaving={totalSaving} totalDebt={totalDebt} incomes={incomes} setIncomes={setIncomes} fixed={fixed} setFixed={setFixed} cats={cats}/>}
-    {tab==="catorcena"&&<CatorcenaTab fixed={fixed} incomes={incomes} extras={extras} savingGoals={savingGoals} debts={debts} totalIncome={totalIncome}/>}
-    {tab==="cuentas"&&<CuentasTab/>}
-    {tab==="gastos"&&<GastosTab extras={extras} setExtras={setExtras} cats={extraCats} setCats={setExtraCats}/>}
+    {tab==="main"&&<MainTab incomes={incomes} setIncomes={setIncomes} fixed={fixed} setFixed={setFixed} extras={extras} setExtras={setExtras} cats={cats} setCats={setCats} extraCats={extraCats} setExtraCats={setExtraCats} savingGoals={savingGoals} debts={debts} totalIncome={totalIncome} totalFixed={totalFixed} totalExtra={totalExtra}/>}
+    {tab==="cuentas"&&<CuentasTab totalFixed={totalFixed} totalExtra={totalExtra}/>}
     {tab==="deudas"&&<DeudasTab totalIncome={totalIncome}/>}
-    {tab==="ahorro"&&<AhorroTab totalIncome={totalIncome}/>}
     {tab==="transporte"&&<TransporteTab/>}
-    {tab==="wish"&&<WishlistTab/>}
+    {tab==="wish"&&<WishlistTab totalIncome={totalIncome}/>}
   </div>;
 }
