@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 
 // ── Supabase config ────────────────────────────────────────────────────────────
 const SB_URL = "https://qswoavwqldksakyzudaq.supabase.co";
-const SB_KEY = "sb_publishable_zL7A7nb5WHeUUieLcNZ18Q_qFiJlTpY";
+const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzd29hdndxbGRrc2FreXp1ZGFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMDA3NjAsImV4cCI6MjA5Njg3Njc2MH0.DS7j8Mjxwm_O8v6P5g4R0ggmtcXa2KrdfLKpl6zXZyY";
 
 async function sbGet(key) {
   try {
