@@ -103,8 +103,12 @@ function TI({value,onChange,placeholder,dimmed}){
 }
 // Clear-only button (does not delete row)
 function ClearBtn({onClear}){
-  return<button onClick={onClear} title="Limpiar" style={{background:"none",border:"none",color:C.lo,cursor:"pointer",fontSize:12,lineHeight:1,padding:"0 3px",flexShrink:0,transition:"color .15s"}}
-    onMouseEnter={e=>e.currentTarget.style.color=C.amber} onMouseLeave={e=>e.currentTarget.style.color=C.lo}>○</button>;
+  return<button onClick={onClear} title="Limpiar valor" style={{background:"none",border:"none",color:C.lo,cursor:"pointer",lineHeight:1,padding:"4px",flexShrink:0,transition:"color .15s",borderRadius:4,display:"flex",alignItems:"center",justifyContent:"center",minWidth:28,minHeight:28}}
+    onMouseEnter={e=>e.currentTarget.style.color=C.amber} onMouseLeave={e=>e.currentTarget.style.color=C.lo}>
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M2 7h10M7 2l5 5-5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  </button>;
 }
 // Full delete button — two-step confirmation: first click asks, second requires typing "delete"
 function XBtn({onClick,label}){
@@ -119,9 +123,11 @@ function XBtn({onClick,label}){
   },[step]);
   if(step===0)return(
     <button onClick={e=>{e.stopPropagation();setStep(1);}} title={`Eliminar${label?" "+label:""}`}
-      style={{background:"none",border:"none",color:C.lo,cursor:"pointer",fontSize:11,lineHeight:1,padding:"2px 4px",flexShrink:0,transition:"color .15s",borderRadius:4}}
+      style={{background:"none",border:"none",color:C.lo,cursor:"pointer",lineHeight:1,padding:"4px",flexShrink:0,transition:"color .15s",borderRadius:4,display:"flex",alignItems:"center",justifyContent:"center",minWidth:28,minHeight:28}}
       onMouseEnter={e=>e.currentTarget.style.color=C.red} onMouseLeave={e=>e.currentTarget.style.color=C.lo}>
-      ╳
+      <svg width="13" height="13" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M1.5 3.5h11M5 3.5V2.5a.5.5 0 01.5-.5h3a.5.5 0 01.5.5v1M5.5 6v5M8.5 6v5M2.5 3.5l.7 8a1 1 0 001 .9h5.6a1 1 0 001-.9l.7-8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
     </button>
   );
   if(step===1)return(
@@ -227,10 +233,10 @@ function Hero({income,fixed,extra,saving,debt,synced}){
     </div>
     <div style={{fontFamily:"monospace",fontWeight:700,fontSize:32,letterSpacing:-1,marginBottom:14,color:bal>=0?C.accent:C.red,lineHeight:1}}>{fmt(bal)}</div>
     <div style={{height:2,background:C.border,borderRadius:99,marginBottom:14}}><div style={{height:"100%",width:`${pct}%`,borderRadius:99,background:bar,transition:"width .4s"}}/></div>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:5}}>
-      {[{l:"Ingresos",v:income,c:C.green},{l:"Fijos",v:fixed,c:C.hi},{l:"Extra",v:extra,c:C.amber},{l:"Ahorro",v:saving,c:C.teal},{l:"Deudas",v:debt,c:C.pink}].map(s=><div key={s.l} style={{borderLeft:`2px solid ${C.border}`,paddingLeft:7}}>
-        <div style={{fontSize:9,color:C.mid,marginBottom:2}}>{s.l}</div>
-        <div style={{fontFamily:"monospace",fontWeight:700,fontSize:10,color:s.c}}>{fmt(s.v)}</div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(70px,1fr))",gap:5}}>
+      {[{l:"Ingresos",v:income,c:C.green},{l:"Fijos",v:fixed,c:C.hi},{l:"Extra",v:extra,c:C.amber},{l:"Ahorro",v:saving,c:C.teal},{l:"Deudas",v:debt,c:C.pink}].map(s=><div key={s.l} style={{borderLeft:`2px solid ${C.border}`,paddingLeft:7,minWidth:0}}>
+        <div style={{fontSize:9,color:C.mid,marginBottom:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.l}</div>
+        <div style={{fontFamily:"monospace",fontWeight:700,fontSize:10,color:s.c,overflow:"hidden",textOverflow:"ellipsis"}}>{fmt(s.v)}</div>
       </div>)}
     </div>
   </div>;
@@ -594,7 +600,18 @@ function DeudaRow({d,onPay,onDel,onTog,onDelAbono,incomeCat}){
     {remaining>0&&d.active&&<>
       <div style={{background:C.s2,borderRadius:8,padding:"8px 12px",marginBottom:8}}>
         <div style={{fontSize:10,color:C.lo,letterSpacing:.8,textTransform:"uppercase",marginBottom:6,fontWeight:600}}>Plan de pago catorcenal</div>
-        {abonoPorCat>0&&<div style={{fontSize:11,color:C.mid,marginBottom:4}}>Con {fmt(abonoPorCat)}/cat → <b style={{color:C.pink}}>{Math.ceil(remaining/abonoPorCat)} catorcenas</b> (~{(Math.ceil(remaining/abonoPorCat)/2).toFixed(1)} meses)</div>}
+        {abonoPorCat>0&&(()=>{
+          const cats=Math.ceil(remaining/abonoPorCat);
+          const catsDone=d.total>0?Math.round((d.paid/d.total)*cats):0;
+          const bars=Math.min(cats,20);
+          return<>
+            <div style={{fontSize:11,color:C.mid,marginBottom:6}}>Con {fmt(abonoPorCat)}/cat → <b style={{color:C.pink}}>{cats} catorcenas</b> (~{(cats/2).toFixed(1)} meses)</div>
+            <div style={{display:"flex",gap:2,flexWrap:"wrap",marginBottom:4}}>
+              {Array.from({length:bars},(_,i)=><div key={i} style={{width:10,height:10,borderRadius:2,background:i<catsDone?C.green:i===catsDone?C.pink:C.border,flexShrink:0,transition:"background .3s"}}/>)}
+              {cats>20&&<span style={{fontSize:10,color:C.lo,alignSelf:"center"}}>+{cats-20}</span>}
+            </div>
+          </>;
+        })()}
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           <span style={{fontSize:11,color:C.mid,flexShrink:0}}>Liquidar en</span>
           <NI value={catN} onChange={v=>setCatN(v)} width={60}/>
@@ -614,13 +631,16 @@ function DeudaRow({d,onPay,onDel,onTog,onDelAbono,incomeCat}){
         <span>{showAbonos?"▾":"▸"}</span> Historial ({(d.abonos||[]).length} abonos)
       </button>
       {showAbonos&&<div style={{marginTop:6,borderTop:`1px solid ${C.border}`,paddingTop:6}}>
-        {[...(d.abonos||[])].reverse().map((a)=><div key={a.id||a.date} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11,color:C.mid,padding:"3px 0",borderBottom:`1px solid ${C.border}22`}}>
-          <span>{a.date}</span>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontFamily:"monospace",color:C.pink}}>{fmt(a.amt)}</span>
-            {onDelAbono&&<XBtn onClick={()=>onDelAbono(d.id,a.id)} label="abono"/>}
-          </div>
-        </div>)}
+        {[...(d.abonos||[])].reverse().map((a)=>{
+          const aKey=a.id||(a.date+a.amt);
+          return<div key={aKey} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11,color:C.mid,padding:"3px 0",borderBottom:`1px solid ${C.border}22`}}>
+            <span>{a.date}</span>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontFamily:"monospace",color:C.pink}}>{fmt(a.amt)}</span>
+              {onDelAbono&&<XBtn onClick={()=>onDelAbono(d.id,aKey)} label="abono"/>}
+            </div>
+          </div>;
+        })}
       </div>}
     </div>}
   </div>;
@@ -638,7 +658,14 @@ function DeudasTab({totalIncome}){
     setDebts(p=>p.map(d=>d.id===id?{...d,paid:Math.min(d.total,d.paid+amt),abonos:[...(d.abonos||[]),{id:uid(),amt,date:new Date().toLocaleDateString("es-MX")}]}:d));
   }
   function delAbono(debtId,abonoId){
-    setDebts(p=>p.map(d=>d.id===debtId?{...d,paid:Math.max(0,d.paid-((d.abonos||[]).find(a=>a.id===abonoId)?.amt||0)),abonos:(d.abonos||[]).filter(a=>a.id!==abonoId)}:d));
+    setDebts(p=>p.map(d=>{
+      if(d.id!==debtId)return d;
+      // Support old abonos without id (legacy Supabase records)
+      const abonos=(d.abonos||[]);
+      const target=abonos.find(a=>(a.id||a.date+a.amt)===abonoId);
+      const removedAmt=target?.amt||0;
+      return{...d,paid:Math.max(0,d.paid-removedAmt),abonos:abonos.filter(a=>(a.id||a.date+a.amt)!==abonoId)};
+    }));
   }
   function del(id){setDebts(p=>p.filter(d=>d.id!==id));}
   function tog(id){setDebts(p=>p.map(d=>d.id===id?{...d,active:!d.active}:d));}
@@ -839,6 +866,11 @@ export default function App(){
       ::-webkit-scrollbar{width:3px;background:#111;}
       ::-webkit-scrollbar-thumb{background:#2a2a2a;border-radius:99px;}
       a:hover{opacity:.75;}
+      button{-webkit-tap-highlight-color:transparent;}
+      input,select,button{font-size:16px;}
+      @media(max-width:480px){
+        input,select{font-size:16px!important;}
+      }
     `}</style>
     <div style={{marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
       <h1 style={{fontSize:17,fontWeight:700,color:C.hi,letterSpacing:-.3}}>Life 2.0</h1>
