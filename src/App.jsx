@@ -23,16 +23,12 @@ function fmtDate(d){return d.toLocaleDateString("es-MX",{day:"numeric",month:"sh
 function daysUntil(d){const n=new Date();n.setHours(0,0,0,0);const x=new Date(d);x.setHours(0,0,0,0);return Math.round((x-n)/864e5);}
 
 // Anchor: Jun 19 2026 = Friday (confirmed). Every 14 days.
-// Sliding window of CAT_WINDOW slots: oldest expired catorcena drops automatically,
-// new one appends at end — window always starts from current/next upcoming date.
-const CAT_WINDOW=14;
-function nextCatorcenas(n=CAT_WINDOW){
+function nextCatorcenas(n=6){
   const anchor=new Date(2026,5,19,12,0,0);
   const today=new Date();today.setHours(12,0,0,0);
   const elapsed=today.getTime()-anchor.getTime();
-  // firstIdx = index of the first catorcena >= today (expired ones drop)
-  const firstIdx=Math.max(0,Math.ceil(elapsed/(14*864e5)));
-  return Array.from({length:n},(_,i)=>new Date(anchor.getTime()+(firstIdx+i)*14*864e5));
+  const periods=Math.max(0,Math.ceil(elapsed/(14*864e5)));
+  return Array.from({length:n},(_,i)=>new Date(anchor.getTime()+(periods+i)*14*864e5));
 }
 
 // Business days between two dates EXCLUSIVE of end (working days TO travel)
@@ -105,15 +101,15 @@ function TI({value,onChange,placeholder,dimmed}){
   return<input value={value||""} onChange={e=>onChange(e.target.value)} placeholder={placeholder||""} disabled={dimmed}
     style={{flex:1,background:"transparent",border:"none",borderBottom:`1px solid ${dimmed?"transparent":C.border}`,color:dimmed?C.lo:C.hi,padding:"3px 0",outline:"none",fontFamily:"inherit",minWidth:0}}/>;
 }
-// Clear-only button: arrow → by default, flips ← on hover to signal "undo value"
+// Clear-only button — always ← (left arrow), amber on hover, perfectly centred
 function ClearBtn({onClear}){
-  const [hov,setHov]=useState(false);
   return<button onClick={onClear} title="Limpiar valor"
-    onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
-    style={{background:"none",border:"none",color:hov?C.amber:C.lo,cursor:"pointer",lineHeight:1,padding:"4px",flexShrink:0,transition:"color .15s",borderRadius:4,display:"flex",alignItems:"center",justifyContent:"center",minWidth:28,minHeight:28}}>
-    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"
-      style={{transform:hov?"scaleX(-1)":"scaleX(1)",transition:"transform .2s"}}>
-      <path d="M2 7h10M7 2l5 5-5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+    style={{background:"none",border:"none",color:C.lo,cursor:"pointer",padding:0,flexShrink:0,
+      display:"flex",alignItems:"center",justifyContent:"center",width:28,height:28,borderRadius:4,transition:"color .15s"}}
+    onMouseEnter={e=>e.currentTarget.style.color=C.amber}
+    onMouseLeave={e=>e.currentTarget.style.color=C.lo}>
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 7H2M7 12l-5-5 5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   </button>;
 }
@@ -155,17 +151,15 @@ function XBtn({onClick,label}){
     </div>
   );
 }
-// Quick delete — no confirmation (for Cargos, TX rows). Arrow rotates on hover.
+// Quick delete — no confirmation (Cargos/TX). Always ← arrow, centred.
 function QDelBtn({onClick}){
-  const [hov,setHov]=useState(false);
-  return<button
-    onClick={e=>{e.stopPropagation();onClick();}}
-    onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
-    title="Eliminar"
-    style={{background:"none",border:"none",color:hov?C.red:C.lo,cursor:"pointer",lineHeight:1,padding:"4px",flexShrink:0,transition:"color .15s",borderRadius:4,display:"flex",alignItems:"center",justifyContent:"center",minWidth:28,minHeight:28}}>
-    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"
-      style={{transform:hov?"scaleX(-1)":"scaleX(1)",transition:"transform .2s"}}>
-      <path d="M2 7h10M7 2l5 5-5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+  return<button onClick={e=>{e.stopPropagation();onClick();}} title="Eliminar"
+    style={{background:"none",border:"none",color:C.lo,cursor:"pointer",padding:0,flexShrink:0,
+      display:"flex",alignItems:"center",justifyContent:"center",width:28,height:28,borderRadius:4,transition:"color .15s"}}
+    onMouseEnter={e=>e.currentTarget.style.color=C.red}
+    onMouseLeave={e=>e.currentTarget.style.color=C.lo}>
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 7H2M7 12l-5-5 5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   </button>;
 }
@@ -264,11 +258,9 @@ function Hero({income,fixed,extra,saving,debt,synced}){
 }
 
 // ── CATORCENA STRIP ───────────────────────────────────────────────────────────
-// 14-slot sliding window: expired catorcenas drop, new ones append automatically.
 function CatorcenaStrip({totalIncome,totalFixed,totalExtra,savingGoals,debts}){
-  const dates=useMemo(()=>nextCatorcenas(CAT_WINDOW),[]);
+  const dates=useMemo(()=>nextCatorcenas(5),[]);
   const [sel,setSel]=useState(0);
-  const scrollRef=useRef(null);
   const pay=dates[sel];
   const dias=daysUntil(pay);
   const incomeCat=totalIncome/2;
@@ -276,40 +268,21 @@ function CatorcenaStrip({totalIncome,totalFixed,totalExtra,savingGoals,debts}){
   const savingCat=savingGoals.reduce((s,g)=>s+Math.max(incomeCat*(g.pct/100),(g.target&&g.months?g.target/(g.months*2):0)),0);
   const debtCat=debts.filter(d=>d.active).reduce((s,d)=>s+(d.monthly||0)/2,0);
   const balCat=incomeCat-fixedCat-savingCat-debtCat-totalExtra;
-  useEffect(()=>{
-    if(scrollRef.current){
-      const btn=scrollRef.current.children[sel];
-      if(btn)btn.scrollIntoView({block:"nearest",inline:"center",behavior:"smooth"});
-    }
-  },[sel]);
   return<div style={{marginBottom:12}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-      <span style={{fontSize:10,color:C.lo,letterSpacing:.8,textTransform:"uppercase",fontWeight:600}}>Catorcenas — ventana {CAT_WINDOW} períodos</span>
-      <span style={{fontSize:10,color:C.lo}}>{sel+1}/{CAT_WINDOW}</span>
+    <div style={{fontSize:10,color:C.lo,letterSpacing:.8,textTransform:"uppercase",marginBottom:8,fontWeight:600}}>
+      Catorcena — viernes cada 14 días (base 19 jun 2026)
     </div>
-    <div ref={scrollRef} style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:6,marginBottom:8,scrollbarWidth:"none"}}>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
       {dates.map((d,i)=>{
         const dU=daysUntil(d);
-        const isSel=sel===i;
-        const isNow=dU>=0&&dU<14;
-        return<button key={i} onClick={()=>setSel(i)}
-          style={{flexShrink:0,padding:"6px 11px",borderRadius:8,border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:600,minWidth:94,textAlign:"center",
-            background:isSel?C.accent:isNow?C.accent+"18":C.s2,
-            color:isSel?C.bg:isNow?C.accent:C.mid,
-            outline:isSel?"none":isNow?`1px solid ${C.accent}44`:`1px solid ${C.border}`}}>
-          {fmtDate(d)}<br/><span style={{fontSize:10,fontWeight:400,color:isSel?C.bg+"99":C.lo}}>{dU===0?"hoy":dU>0?`en ${dU}d`:"-"}</span>
+        return<button key={i} onClick={()=>setSel(i)} style={{padding:"6px 11px",borderRadius:8,border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:600,background:sel===i?C.accent:C.s2,color:sel===i?C.bg:C.mid,outline:sel===i?"none":`1px solid ${C.border}`}}>
+          {fmtDate(d)}<br/><span style={{fontSize:10,fontWeight:400,color:sel===i?C.bg+"99":C.lo}}>{dU===0?"hoy":dU>0?`en ${dU}d`:`hace ${-dU}d`}</span>
         </button>;
       })}
     </div>
-    <div style={{display:"flex",gap:6,justifyContent:"flex-end",marginBottom:8}}>
-      <button onClick={()=>setSel(s=>Math.max(0,s-1))} disabled={sel===0}
-        style={{background:"none",border:`1px solid ${C.border}`,borderRadius:6,color:sel===0?C.border:C.mid,cursor:sel===0?"default":"pointer",padding:"2px 10px",fontSize:14}}>‹</button>
-      <button onClick={()=>setSel(s=>Math.min(CAT_WINDOW-1,s+1))} disabled={sel===CAT_WINDOW-1}
-        style={{background:"none",border:`1px solid ${C.border}`,borderRadius:6,color:sel===CAT_WINDOW-1?C.border:C.mid,cursor:sel===CAT_WINDOW-1?"default":"pointer",padding:"2px 10px",fontSize:14}}>›</button>
-    </div>
     <div style={{background:C.s1,border:`2px solid ${C.accent}33`,borderRadius:14,padding:"14px 16px"}}>
       <div style={{fontSize:10,color:C.accent,letterSpacing:1,textTransform:"uppercase",fontWeight:700,marginBottom:6}}>
-        {fmtDate(pay)} — {dias>0?`en ${dias} días`:dias===0?"hoy":"próxima"}
+        {fmtDate(pay)} — {dias>0?`en ${dias} días`:dias===0?"hoy":"pasada"}
       </div>
       <div style={{fontFamily:"monospace",fontWeight:700,fontSize:26,color:balCat>=0?C.accent:C.red,marginBottom:10}}>{fmt(balCat)}</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
@@ -527,6 +500,33 @@ function CreditCardRow({a,disp,cardTxs,typeColors,typeLabels,onUpd,onDel,onAddCa
   </div>;
 }
 
+// ── TX ROW — inline-editable description ─────────────────────────────────────
+function TxRow({t,typeColors,typeLabels,onDel,onRename}){
+  const [editing,setEditing]=useState(false);
+  const [val,setVal]=useState(t.desc);
+  function commit(){const v=val.trim();if(v&&v!==t.desc)onRename(t.id,v);setEditing(false);}
+  return<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 16px",borderBottom:`1px solid ${C.border}`,transition:"background .1s"}}
+    onMouseEnter={e=>e.currentTarget.style.background=C.s2} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+    <div style={{flex:1,minWidth:0}}>
+      {editing
+        ?<input autoFocus value={val} onChange={e=>setVal(e.target.value)}
+            onBlur={commit} onKeyDown={e=>{if(e.key==="Enter")commit();if(e.key==="Escape"){setVal(t.desc);setEditing(false);}}}
+            style={{width:"100%",background:"transparent",border:"none",borderBottom:`1px solid ${C.accent}`,color:C.accent,fontSize:13,outline:"none",fontFamily:"inherit",fontWeight:600,padding:"0 1px"}}/>
+        :<div onClick={()=>{setVal(t.desc);setEditing(true);}} title="Clic para editar"
+            style={{color:C.hi,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"text",
+              borderBottom:`1px dashed ${C.border}`,paddingBottom:1,transition:"border-color .15s"}}
+            onMouseEnter={e=>e.currentTarget.style.borderColor=C.lo}
+            onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
+            {t.desc}
+          </div>}
+      <div style={{fontSize:10,color:C.lo,marginTop:2}}>{t.accName} · {t.date}</div>
+    </div>
+    <Badge label={typeLabels[t.type]} color={typeColors[t.type]}/>
+    <span style={{fontFamily:"monospace",fontSize:13,color:typeColors[t.type],flexShrink:0}}>{t.type==="abono"?"-":""}{fmt(t.amt)}</span>
+    <QDelBtn onClick={()=>onDel(t.id)}/>
+  </div>;
+}
+
 // ── CUENTAS TAB (includes ingresos) ───────────────────────────────────────────
 function CuentasTab({totalFixed,totalExtra,incomes,setIncomes}){
   const [accounts,setAccounts]=useSynced("accounts",DEFAULT_ACCOUNTS);
@@ -541,6 +541,7 @@ function CuentasTab({totalFixed,totalExtra,incomes,setIncomes}){
   function upd(id,f,v){setAccounts(p=>p.map(a=>a.id===id?{...a,[f]:v}:a));}
   function add(type){setAccounts(p=>[...p,{id:uid(),name:"",type,balance:0,limit:0}]);}
   function delAcc(id){setAccounts(p=>p.filter(a=>a.id!==id));}
+  function renameTx(id,desc){setTxs(p=>p.map(t=>t.id===id?{...t,desc}:t));}
   const updI=(id,f,v)=>setIncomes(p=>p.map(r=>r.id===id?{...r,[f]:v}:r));
   const netoReal=totalDebito-totalCredito;
   const disponibleTras=netoReal-totalFixed-totalExtra;
@@ -598,16 +599,7 @@ function CuentasTab({totalFixed,totalExtra,incomes,setIncomes}){
       </div>
       {filteredTxs.length===0&&<div style={{padding:"12px 16px",color:C.lo,fontStyle:"italic",fontSize:12}}>Sin transacciones</div>}
       <div style={{maxHeight:300,overflowY:"auto"}}>
-        {filteredTxs.map(t=><div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 16px",borderBottom:`1px solid ${C.border}`}}
-          onMouseEnter={e=>e.currentTarget.style.background=C.s2} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{color:C.hi,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.desc}</div>
-            <div style={{fontSize:10,color:C.lo}}>{t.accName} · {t.date}</div>
-          </div>
-          <Badge label={typeLabels[t.type]} color={typeColors[t.type]}/>
-          <span style={{fontFamily:"monospace",fontSize:13,color:typeColors[t.type],flexShrink:0}}>{t.type==="abono"?"-":""}{fmt(t.amt)}</span>
-          <QDelBtn onClick={()=>setTxs(p=>p.filter(x=>x.id!==t.id))}/>
-        </div>)}
+        {filteredTxs.map(t=><TxRow key={t.id} t={t} typeColors={typeColors} typeLabels={typeLabels} onDel={id=>setTxs(p=>p.filter(x=>x.id!==id))} onRename={renameTx}/>)
       </div>
     </Block>
 
@@ -621,12 +613,15 @@ function CuentasTab({totalFixed,totalExtra,incomes,setIncomes}){
 }
 
 // ── DEUDA ROW (extracted to fix useState-in-map crash) ────────────────────────
-function DeudaRow({d,onPay,onDel,onTog,onDelAbono,incomeCat}){
+function DeudaRow({d,onPay,onDel,onTog,onDelAbono,onRename,incomeCat}){
   const remaining=d.total-d.paid;
   const pct=d.total>0?Math.min(100,(d.paid/d.total)*100):0;
   const [payAmt,setPayAmt]=useState("");
   const [catN,setCatN]=useState("");
   const [showAbonos,setShowAbonos]=useState(false);
+  const [editingName,setEditingName]=useState(false);
+  const [nameVal,setNameVal]=useState(d.name);
+  function commitName(){const v=nameVal.trim();if(v&&v!==d.name)onRename(d.id,v);setEditingName(false);}
   const cN=parseInt(catN)||0;
   const abonoSug=cN>0&&remaining>0?remaining/cN:0;
   // Projection: how many catorcenas to pay off with suggested abono per catorcena
@@ -634,7 +629,20 @@ function DeudaRow({d,onPay,onDel,onTog,onDelAbono,incomeCat}){
   const abonoPorCat=d.monthly>0?d.monthly/2:0;
   return<div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,opacity:d.active?1:.4}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,flexWrap:"wrap",gap:6}}>
-      <div style={{display:"flex",alignItems:"center",gap:8}}><Toggle on={d.active} onChange={()=>onTog(d.id)}/><span style={{color:C.hi,fontWeight:600,fontSize:13}}>{d.name}</span>{d.note&&<span style={{fontSize:11,color:C.lo}}>{d.note}</span>}</div>
+      <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
+          <Toggle on={d.active} onChange={()=>onTog(d.id)}/>
+          {editingName
+            ?<input autoFocus value={nameVal} onChange={e=>setNameVal(e.target.value)}
+                onBlur={commitName} onKeyDown={e=>{if(e.key==="Enter")commitName();if(e.key==="Escape"){setNameVal(d.name);setEditingName(false);}}}
+                style={{flex:1,background:"transparent",border:"none",borderBottom:`1px solid ${C.accent}`,color:C.accent,fontWeight:600,fontSize:13,outline:"none",fontFamily:"inherit",padding:"0 2px",minWidth:0}}/>
+            :<span onClick={()=>{setNameVal(d.name);setEditingName(true);}} title="Clic para editar"
+                style={{color:C.hi,fontWeight:600,fontSize:13,cursor:"text",borderBottom:`1px dashed ${C.border}`,paddingBottom:1,transition:"border-color .15s"}}
+                onMouseEnter={e=>e.currentTarget.style.borderColor=C.lo}
+                onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
+                {d.name}
+              </span>}
+          {d.note&&!editingName&&<span style={{fontSize:11,color:C.lo}}>{d.note}</span>}
+        </div>
       <div style={{display:"flex",gap:6,alignItems:"center"}}>{d.monthly>0&&<Badge label={`${fmt(d.monthly)}/mes`} color={C.pink}/>}<XBtn onClick={()=>onDel(d.id)} label={d.name}/></div>
     </div>
     <div style={{height:4,background:C.border,borderRadius:99,marginBottom:5}}><div style={{height:"100%",width:`${pct}%`,borderRadius:99,background:remaining<=0?C.green:C.pink,transition:"width .4s"}}/></div>
@@ -692,12 +700,8 @@ function DeudasTab({totalIncome}){
   const [debts,setDebts]=useSynced("debts",[]);
   const [name,setName]=useState(""); const [total,setTotal]=useState("");
   function add(){
-    const n=name.trim();
-    const t=parseFloat(total)||0;
-    // Validate: name must be non-empty, non-numeric text; total must be >0
-    if(!n||t<=0)return;
-    if(!isNaN(Number(n)))return; // reject if user typed an amount in the name field
-    setDebts(p=>[...p,{id:uid(),name:n,total:t,paid:0,note:"",active:true,abonos:[]}]);
+    if(!name.trim()||!total)return;
+    setDebts(p=>[...p,{id:uid(),name:name.trim(),total:parseFloat(total)||0,paid:0,note:"",active:true,abonos:[]}]);
     setName("");setTotal("");
   }
   function pay(id,amt){
@@ -713,6 +717,7 @@ function DeudasTab({totalIncome}){
       return{...d,paid:Math.max(0,d.paid-removedAmt),abonos:abonos.filter(a=>(a.id||a.date+a.amt)!==abonoId)};
     }));
   }
+  function rename(id,name){setDebts(p=>p.map(d=>d.id===id?{...d,name}:d));}
   function del(id){setDebts(p=>p.filter(d=>d.id!==id));}
   function tog(id){setDebts(p=>p.map(d=>d.id===id?{...d,active:!d.active}:d));}
   const incomeCat=totalIncome/2;
@@ -724,7 +729,7 @@ function DeudasTab({totalIncome}){
       <div style={{position:"relative"}}><span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:C.mid,pointerEvents:"none"}}>$</span><input type="number" min="0" value={total} onChange={e=>setTotal(e.target.value)} placeholder="Monto total de la deuda" style={{...inp,paddingLeft:18,textAlign:"right"}}/></div>
     </div>
     {debts.length===0&&<div style={{padding:"12px 16px",color:C.lo,fontStyle:"italic",fontSize:12}}>Sin deudas registradas</div>}
-    {debts.map(d=><DeudaRow key={d.id} d={d} onPay={pay} onDel={del} onTog={tog} onDelAbono={delAbono} incomeCat={incomeCat}/>)}
+    {debts.map(d=><DeudaRow key={d.id} d={d} onPay={pay} onDel={del} onTog={tog} onDelAbono={delAbono} onRename={rename} incomeCat={incomeCat}/>)}
   </Block>;
 }
 
