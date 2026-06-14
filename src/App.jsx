@@ -78,7 +78,7 @@ const DEFAULT_CATS=[
   "Fisioterapia","Restaurantes","Electrónica","Cuidado personal","Otro"
 ];
 const DEFAULT_EXTRA_CATS=[
-  "Alimentación","Restaurantes","Ropa","Calzado","Salud","Farmacia",
+  "Alimentación","Restaurantes","Ropa","Calzado","Salud",
   "Transporte","Entretenimiento","Hogar","Electrónica","Cuidado personal",
   "Regalos","Educación","Otro"
 ];
@@ -103,13 +103,44 @@ function TI({value,onChange,placeholder,dimmed}){
 }
 // Clear-only button (does not delete row)
 function ClearBtn({onClear}){
-  return<button onClick={onClear} title="Limpiar" style={{background:"none",border:"none",color:C.lo,cursor:"pointer",fontSize:14,lineHeight:1,padding:"0 3px",flexShrink:0,transition:"color .15s"}}
-    onMouseEnter={e=>e.currentTarget.style.color=C.amber} onMouseLeave={e=>e.currentTarget.style.color=C.lo}>⌫</button>;
+  return<button onClick={onClear} title="Limpiar" style={{background:"none",border:"none",color:C.lo,cursor:"pointer",fontSize:12,lineHeight:1,padding:"0 3px",flexShrink:0,transition:"color .15s"}}
+    onMouseEnter={e=>e.currentTarget.style.color=C.amber} onMouseLeave={e=>e.currentTarget.style.color=C.lo}>○</button>;
 }
-// Full delete button
-function XBtn({onClick}){
-  return<button onClick={onClick} style={{background:"none",border:"none",color:C.lo,cursor:"pointer",fontSize:18,lineHeight:1,padding:"0 2px",flexShrink:0,minWidth:24,transition:"color .15s"}}
-    onMouseEnter={e=>e.currentTarget.style.color=C.red} onMouseLeave={e=>e.currentTarget.style.color=C.lo}>×</button>;
+// Full delete button — two-step confirmation: first click asks, second requires typing "delete"
+function XBtn({onClick,label}){
+  const [step,setStep]=useState(0); // 0=idle 1=confirm 2=type
+  const [typed,setTyped]=useState("");
+  const ref=useRef(null);
+  useEffect(()=>{
+    if(step===0)return;
+    function h(e){if(ref.current&&!ref.current.contains(e.target))setStep(0);}
+    document.addEventListener("mousedown",h);
+    return()=>document.removeEventListener("mousedown",h);
+  },[step]);
+  if(step===0)return(
+    <button onClick={e=>{e.stopPropagation();setStep(1);}} title={`Eliminar${label?" "+label:""}`}
+      style={{background:"none",border:"none",color:C.lo,cursor:"pointer",fontSize:11,lineHeight:1,padding:"2px 4px",flexShrink:0,transition:"color .15s",borderRadius:4}}
+      onMouseEnter={e=>e.currentTarget.style.color=C.red} onMouseLeave={e=>e.currentTarget.style.color=C.lo}>
+      ╳
+    </button>
+  );
+  if(step===1)return(
+    <div ref={ref} onClick={e=>e.stopPropagation()} style={{display:"flex",alignItems:"center",gap:5,background:C.s2,border:`1px solid ${C.red}44`,borderRadius:7,padding:"3px 8px",flexShrink:0}}>
+      <span style={{fontSize:10,color:C.mid,whiteSpace:"nowrap"}}>¿Eliminar?</span>
+      <button onClick={()=>setStep(2)} style={{background:C.red+"22",border:"none",color:C.red,cursor:"pointer",fontSize:10,fontWeight:700,borderRadius:4,padding:"2px 7px",fontFamily:"inherit"}}>Sí</button>
+      <button onClick={()=>setStep(0)} style={{background:"none",border:"none",color:C.lo,cursor:"pointer",fontSize:10,borderRadius:4,padding:"2px 5px",fontFamily:"inherit"}}>No</button>
+    </div>
+  );
+  return(
+    <div ref={ref} onClick={e=>e.stopPropagation()} style={{display:"flex",alignItems:"center",gap:5,background:C.s2,border:`1px solid ${C.red}55`,borderRadius:7,padding:"3px 8px",flexShrink:0}}>
+      <input autoFocus value={typed} onChange={e=>setTyped(e.target.value)} placeholder="Escribe: delete"
+        onKeyDown={e=>{if(e.key==="Escape")setStep(0);if(e.key==="Enter"&&typed==="delete"){onClick();setStep(0);}}}
+        style={{width:110,background:"transparent",border:"none",color:C.red,fontSize:11,outline:"none",fontFamily:"monospace"}}/>
+      <button onClick={()=>{if(typed==="delete"){onClick();setStep(0);}}} disabled={typed!=="delete"}
+        style={{background:typed==="delete"?C.red:"transparent",border:"none",color:typed==="delete"?C.bg:C.lo,cursor:typed==="delete"?"pointer":"default",fontSize:10,fontWeight:700,borderRadius:4,padding:"2px 7px",fontFamily:"inherit",transition:"all .15s"}}>✓</button>
+      <button onClick={()=>{setStep(0);setTyped("");}} style={{background:"none",border:"none",color:C.lo,cursor:"pointer",fontSize:10,padding:"2px 4px"}}>✕</button>
+    </div>
+  );
 }
 function AddBtn({label,onClick,color}){
   return<button onClick={onClick} style={{display:"flex",alignItems:"center",gap:7,width:"100%",background:"none",border:"none",padding:"10px 16px",color:C.lo,cursor:"pointer",fontFamily:"inherit",transition:"color .15s"}}
@@ -140,18 +171,42 @@ function NI({value,onChange,width}){
     style={{width:width||70,background:C.s2,border:`1px solid ${C.borderHi}`,borderRadius:7,color:C.hi,padding:"6px 8px",fontFamily:"monospace",fontSize:13,textAlign:"right",outline:"none"}}/>;
 }
 function CatSel({value,onChange,cats}){
-  const known=cats.includes(value);
-  const [custom,setCustom]=useState(!known&&!!value);
-  if(custom)return<div style={{display:"flex",gap:4,flexShrink:0}}>
-    <input value={value||""} onChange={e=>onChange(e.target.value)} placeholder="Categoría"
-      style={{width:110,background:C.s2,border:`1px solid ${C.borderHi}`,borderRadius:7,color:C.hi,padding:"5px 8px",fontSize:12,fontFamily:"inherit",outline:"none"}}/>
-    <button onClick={()=>{setCustom(false);onChange(cats[0]);}} style={{background:"none",border:"none",color:C.lo,cursor:"pointer",fontSize:12}}>↩</button>
+  const [open,setOpen]=useState(false);
+  const [q,setQ]=useState("");
+  const ref=useRef(null);
+  useEffect(()=>{
+    if(!open)return;
+    function h(e){if(ref.current&&!ref.current.contains(e.target))setOpen(false);}
+    document.addEventListener("mousedown",h);
+    return()=>document.removeEventListener("mousedown",h);
+  },[open]);
+  const filtered=cats.filter(c=>c.toLowerCase().includes(q.toLowerCase()));
+  return<div ref={ref} style={{position:"relative",flexShrink:0}}>
+    <div onClick={()=>{setOpen(o=>!o);setQ("");}} style={{display:"flex",alignItems:"center",gap:4,background:C.s2,border:`1px solid ${open?C.accent:C.border}`,borderRadius:7,padding:"5px 8px",cursor:"pointer",minWidth:90,maxWidth:130}}>
+      <span style={{flex:1,fontSize:12,color:C.mid,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{value||cats[0]}</span>
+      <span style={{fontSize:9,color:C.lo}}>{open?"▴":"▾"}</span>
+    </div>
+    {open&&<div style={{position:"absolute",top:"calc(100% + 4px)",left:0,zIndex:99,background:C.s1,border:`1px solid ${C.borderHi}`,borderRadius:9,minWidth:150,maxWidth:200,boxShadow:"0 8px 24px #0008",overflow:"hidden"}}>
+      <input autoFocus value={q} onChange={e=>setQ(e.target.value)}
+        onKeyDown={e=>{
+          if(e.key==="Enter"){const match=filtered[0]||q.trim();if(match){onChange(match);setOpen(false);setQ("");}}
+          if(e.key==="Escape")setOpen(false);
+        }}
+        placeholder="Buscar o escribir..."
+        style={{width:"100%",background:C.s2,border:"none",borderBottom:`1px solid ${C.border}`,color:C.hi,padding:"8px 10px",fontSize:12,fontFamily:"inherit",outline:"none"}}/>
+      <div style={{maxHeight:160,overflowY:"auto"}}>
+        {q.trim()&&!cats.find(c=>c.toLowerCase()===q.trim().toLowerCase())&&
+          <div onClick={()=>{onChange(q.trim());setOpen(false);setQ("");}} style={{padding:"8px 12px",fontSize:12,color:C.accent,cursor:"pointer",borderBottom:`1px solid ${C.border}`}}>
+            + Crear "{q.trim()}"
+          </div>}
+        {filtered.map(c=><div key={c} onClick={()=>{onChange(c);setOpen(false);setQ("");}}
+          style={{padding:"8px 12px",fontSize:12,color:c===value?C.accent:C.hi,background:c===value?C.accent+"11":"transparent",cursor:"pointer",transition:"background .1s"}}
+          onMouseEnter={e=>e.currentTarget.style.background=C.s2} onMouseLeave={e=>e.currentTarget.style.background=c===value?C.accent+"11":"transparent"}>
+          {c}
+        </div>)}
+      </div>
+    </div>}
   </div>;
-  return<select value={known?value:cats[0]} onChange={e=>{if(e.target.value==="__new__"){setCustom(true);onChange("");}else onChange(e.target.value);}}
-    style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:7,color:C.mid,padding:"5px 6px",fontFamily:"inherit",outline:"none",fontSize:12,flexShrink:0}}>
-    {cats.map(c=><option key={c} value={c}>{c}</option>)}
-    <option value="__new__">+ Agregar...</option>
-  </select>;
 }
 
 // ── TABS ──────────────────────────────────────────────────────────────────────
@@ -347,6 +402,10 @@ function MainTab({fixed,setFixed,extras,setExtras,cats,setCats,extraCats,setExtr
 // ── CUENTAS TAB (includes ingresos) ───────────────────────────────────────────
 function CuentasTab({totalFixed,totalExtra,incomes,setIncomes}){
   const [accounts,setAccounts]=useSynced("accounts",DEFAULT_ACCOUNTS);
+  const [txs,setTxs]=useSynced("txs",[]);
+  const [txFilter,setTxFilter]=useState("todas");
+  // New TX form
+  const [txDesc,setTxDesc]=useState(""); const [txAmt,setTxAmt]=useState(""); const [txType,setTxType]=useState("gasto"); const [txAcc,setTxAcc]=useState("");
   const debito=accounts.filter(a=>a.type==="debito");
   const credito=accounts.filter(a=>a.type==="credito");
   const totalDebito=debito.reduce((s,a)=>s+a.balance,0);
@@ -355,45 +414,123 @@ function CuentasTab({totalFixed,totalExtra,incomes,setIncomes}){
   const totalIncome=incomes.reduce((s,r)=>s+r.amount,0);
   function upd(id,f,v){setAccounts(p=>p.map(a=>a.id===id?{...a,[f]:v}:a));}
   function add(type){setAccounts(p=>[...p,{id:uid(),name:"",type,balance:0,limit:0}]);}
-  function del(id){setAccounts(p=>p.filter(a=>a.id!==id));}
+  function delAcc(id){setAccounts(p=>p.filter(a=>a.id!==id));}
   const updI=(id,f,v)=>setIncomes(p=>p.map(r=>r.id===id?{...r,[f]:v}:r));
   const netoReal=totalDebito-totalCredito;
   const disponibleTras=netoReal-totalFixed-totalExtra;
+
+  function addTx(){
+    const a=parseFloat(txAmt); if(!txDesc.trim()||!a||!txAcc)return;
+    const acc=accounts.find(x=>x.id===parseInt(txAcc));
+    const isCredit=acc?.type==="credito";
+    const newBal=txType==="gasto"?(acc?.balance||0)+a:(acc?.balance||0)-a;
+    setAccounts(p=>p.map(x=>x.id===parseInt(txAcc)?{...x,balance:Math.max(0,newBal)}:x));
+    setTxs(p=>[{id:uid(),desc:txDesc.trim(),amt:a,type:txType,accId:parseInt(txAcc),accName:acc?.name||"",accType:acc?.type||"debito",date:new Date().toLocaleDateString("es-MX"),ts:Date.now()},...p]);
+    setTxDesc("");setTxAmt("");
+  }
+
+  const filteredTxs=txFilter==="todas"?txs:txFilter==="credito"?txs.filter(t=>t.accType==="credito"):txs.filter(t=>t.accType==="debito");
+  const typeColors={gasto:C.red,abono:C.green,cargo:C.amber};
+  const typeLabels={gasto:"Gasto",abono:"Abono",cargo:"Cargo"};
+  const inp2={background:C.s2,border:`1px solid ${C.borderHi}`,borderRadius:7,color:C.hi,padding:"7px 10px",fontFamily:"inherit",outline:"none"};
+
   return<div>
-    {/* INGRESOS (moved here) */}
+    {/* INGRESOS */}
     <Block label="Ingresos" total={totalIncome} totalColor={C.green} footer={<AddBtn label="Agregar fuente" onClick={()=>setIncomes(p=>[...p,{id:uid(),name:"",amount:0}])}/>}>
       {incomes.map(r=><TR key={r.id}>
         <TI value={r.name} onChange={v=>updI(r.id,"name",v)} placeholder="Fuente de ingreso"/>
         <MI value={r.amount} onChange={v=>updI(r.id,"amount",v)}/>
         <ClearBtn onClear={()=>updI(r.id,"amount",0)}/>
-        <XBtn onClick={()=>setIncomes(p=>p.filter(x=>x.id!==r.id))}/>
+        <XBtn onClick={()=>setIncomes(p=>p.filter(x=>x.id!==r.id))} label="ingreso"/>
       </TR>)}
     </Block>
 
+    {/* DÉBITO */}
     <Block label="Débito" total={totalDebito} totalColor={C.green} accent={C.green} footer={<AddBtn label="Agregar débito" onClick={()=>add("debito")} color={C.green}/>}>
-      {debito.map(a=><TR key={a.id}><TI value={a.name} onChange={v=>upd(a.id,"name",v)} placeholder="Nombre"/><MI value={a.balance} onChange={v=>upd(a.id,"balance",v)}/><ClearBtn onClear={()=>upd(a.id,"balance",0)}/><XBtn onClick={()=>del(a.id)}/></TR>)}
+      {debito.map(a=><TR key={a.id}>
+        <TI value={a.name} onChange={v=>upd(a.id,"name",v)} placeholder="Nombre"/>
+        <MI value={a.balance} onChange={v=>upd(a.id,"balance",v)}/>
+        <ClearBtn onClear={()=>upd(a.id,"balance",0)}/>
+        <XBtn onClick={()=>delAcc(a.id)} label={a.name}/>
+      </TR>)}
     </Block>
 
+    {/* CRÉDITO */}
     <Block label="Crédito" totalColor={C.pink} accent={C.pink} footer={<AddBtn label="Agregar tarjeta crédito" onClick={()=>add("credito")} color={C.pink}/>}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 90px 90px 24px 24px",gap:6,padding:"6px 16px",borderBottom:`1px solid ${C.border}`}}>
         {["Tarjeta","Usado","Límite","",""].map((h,i)=><span key={i} style={{fontSize:10,color:C.lo,fontWeight:600,letterSpacing:.8,textTransform:"uppercase"}}>{h}</span>)}
       </div>
-      {credito.map(a=>{const disp=(a.limit||0)-a.balance;return<div key={a.id}>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 90px 90px 24px 24px",gap:6,alignItems:"center",padding:"9px 16px",borderBottom:`1px solid ${C.border}`}}>
-          <TI value={a.name} onChange={v=>upd(a.id,"name",v)} placeholder="Nombre"/>
-          <MI value={a.balance} onChange={v=>upd(a.id,"balance",v)} width={82}/>
-          <MI value={a.limit} onChange={v=>upd(a.id,"limit",v)} width={82} ph="Límite"/>
-          <ClearBtn onClear={()=>upd(a.id,"balance",0)}/>
-          <XBtn onClick={()=>del(a.id)}/>
-        </div>
-        {(a.limit||0)>0&&<div style={{padding:"3px 16px 5px",fontSize:11,color:disp>=0?C.green:C.red,borderBottom:`1px solid ${C.border}`}}>Disponible: {fmt(disp)}</div>}
-      </div>;})}
+      {credito.map(a=>{
+        const disp=(a.limit||0)-a.balance;
+        const cardTxs=txs.filter(t=>t.accId===a.id).slice(0,5);
+        return<div key={a.id}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 90px 90px 24px 24px",gap:6,alignItems:"center",padding:"9px 16px",borderBottom:`1px solid ${C.border}`}}>
+            <TI value={a.name} onChange={v=>upd(a.id,"name",v)} placeholder="Nombre"/>
+            <MI value={a.balance} onChange={v=>upd(a.id,"balance",v)} width={82}/>
+            <MI value={a.limit} onChange={v=>upd(a.id,"limit",v)} width={82} ph="Límite"/>
+            <ClearBtn onClear={()=>upd(a.id,"balance",0)}/>
+            <XBtn onClick={()=>delAcc(a.id)} label={a.name}/>
+          </div>
+          {(a.limit||0)>0&&<div style={{padding:"3px 16px 5px",fontSize:11,color:disp>=0?C.green:C.red,borderBottom:`1px solid ${C.border}`}}>Disponible: {fmt(disp)}</div>}
+          {/* Mini historial por tarjeta */}
+          {cardTxs.length>0&&<div style={{padding:"6px 16px 8px",borderBottom:`1px solid ${C.border}`}}>
+            <div style={{fontSize:10,color:C.lo,letterSpacing:.8,textTransform:"uppercase",marginBottom:4,fontWeight:600}}>Últimos movimientos</div>
+            {cardTxs.map(t=><div key={t.id} style={{display:"flex",justifyContent:"space-between",fontSize:11,padding:"2px 0"}}>
+              <span style={{color:C.mid,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{t.desc}</span>
+              <span style={{fontFamily:"monospace",color:typeColors[t.type]||C.mid,marginLeft:8,flexShrink:0}}>{t.type==="abono"?"-":""}{fmt(t.amt)}</span>
+            </div>)}
+          </div>}
+        </div>;
+      })}
       <div style={{padding:"10px 16px",display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:6}}>
         <span style={{fontSize:11,color:C.mid}}>Usado: <b style={{color:C.pink,fontFamily:"monospace"}}>{fmt(totalCredito)}</b></span>
         {totalLimit>0&&<span style={{fontSize:11,color:C.mid}}>Disponible: <b style={{color:totalLimit-totalCredito>=0?C.green:C.red,fontFamily:"monospace"}}>{fmt(totalLimit-totalCredito)}</b></span>}
       </div>
     </Block>
 
+    {/* TRANSACCIONES */}
+    <Block label="Transacciones" accent={C.blue} defaultOpen={true}>
+      {/* Form */}
+      <div style={{padding:"10px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",flexDirection:"column",gap:8}}>
+        <input value={txDesc} onChange={e=>setTxDesc(e.target.value)} placeholder="Descripción" style={{...inp2,width:"100%"}}/>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <div style={{position:"relative",flex:1,minWidth:90}}>
+            <span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:C.mid,pointerEvents:"none"}}>$</span>
+            <input type="number" min="0" value={txAmt} onChange={e=>setTxAmt(e.target.value)} placeholder="0" style={{...inp2,paddingLeft:18,textAlign:"right",width:"100%"}}/>
+          </div>
+          {/* Tipo */}
+          <div style={{display:"flex",gap:4,background:C.s2,borderRadius:7,padding:3,flexShrink:0}}>
+            {["gasto","abono","cargo"].map(t=><button key={t} onClick={()=>setTxType(t)} style={{padding:"4px 9px",borderRadius:5,border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:600,background:txType===t?typeColors[t]:"transparent",color:txType===t?C.bg:C.lo,transition:"all .15s"}}>{typeLabels[t]}</button>)}
+          </div>
+          {/* Cuenta */}
+          <select value={txAcc} onChange={e=>setTxAcc(e.target.value)} style={{...inp2,flexShrink:0,color:C.mid,padding:"7px 8px"}}>
+            <option value="">Cuenta...</option>
+            <optgroup label="Débito">{debito.map(a=><option key={a.id} value={a.id}>{a.name||"Sin nombre"}</option>)}</optgroup>
+            <optgroup label="Crédito">{credito.map(a=><option key={a.id} value={a.id}>{a.name||"Sin nombre"}</option>)}</optgroup>
+          </select>
+          <button onClick={addTx} style={{background:C.blue,color:C.bg,border:"none",borderRadius:7,padding:"7px 14px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>+</button>
+        </div>
+      </div>
+      {/* Filtro */}
+      <div style={{display:"flex",gap:4,padding:"8px 16px",borderBottom:`1px solid ${C.border}`}}>
+        {["todas","debito","credito"].map(f=><button key={f} onClick={()=>setTxFilter(f)} style={{padding:"4px 10px",borderRadius:6,border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:600,background:txFilter===f?C.blue+"22":"transparent",color:txFilter===f?C.blue:C.lo,outline:txFilter===f?`1px solid ${C.blue}44`:"none"}}>{f==="todas"?"Todas":f==="debito"?"Débito":"Crédito"}</button>)}
+      </div>
+      {filteredTxs.length===0&&<div style={{padding:"12px 16px",color:C.lo,fontStyle:"italic",fontSize:12}}>Sin transacciones</div>}
+      <div style={{maxHeight:300,overflowY:"auto"}}>
+        {filteredTxs.map(t=><div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 16px",borderBottom:`1px solid ${C.border}`}}
+          onMouseEnter={e=>e.currentTarget.style.background=C.s2} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:C.hi,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.desc}</div>
+            <div style={{fontSize:10,color:C.lo}}>{t.accName} · {t.date}</div>
+          </div>
+          <Badge label={typeLabels[t.type]} color={typeColors[t.type]}/>
+          <span style={{fontFamily:"monospace",fontSize:13,color:typeColors[t.type],flexShrink:0}}>{t.type==="abono"?"-":""}{fmt(t.amt)}</span>
+          <XBtn onClick={()=>setTxs(p=>p.filter(x=>x.id!==t.id))} label={t.desc}/>
+        </div>)}
+      </div>
+    </Block>
+
+    {/* POSICIÓN REAL */}
     <div style={{background:C.s1,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden"}}>
       <div style={{padding:"10px 16px",borderBottom:`1px solid ${C.border}`}}><span style={{fontSize:10,fontWeight:700,letterSpacing:1.5,color:C.mid,textTransform:"uppercase"}}>Posición real</span></div>
       {[{l:"Total débito",v:totalDebito,c:C.green},{l:"Total crédito (debes)",v:-totalCredito,c:C.pink},{l:"Neto bancario",v:netoReal,c:netoReal>=0?C.green:C.red},{l:"Menos gastos fijos",v:-totalFixed,c:C.hi},{l:"Menos esporádicos",v:-totalExtra,c:C.amber}].map(({l,v,c})=><div key={l} style={{display:"flex",justifyContent:"space-between",padding:"8px 16px",borderBottom:`1px solid ${C.border}`}}><span style={{color:C.mid,fontSize:12}}>{l}</span><span style={{fontFamily:"monospace",fontWeight:600,color:c}}>{fmt(v)}</span></div>)}
@@ -402,12 +539,59 @@ function CuentasTab({totalFixed,totalExtra,incomes,setIncomes}){
   </div>;
 }
 
+// ── DEUDA ROW (extracted to fix useState-in-map crash) ────────────────────────
+function DeudaRow({d,onPay,onDel,onTog,incomeCat}){
+  const remaining=d.total-d.paid;
+  const pct=d.total>0?Math.min(100,(d.paid/d.total)*100):0;
+  const [payAmt,setPayAmt]=useState("");
+  const [catN,setCatN]=useState("");
+  const cN=parseInt(catN)||0;
+  const abonoSug=cN>0&&remaining>0?remaining/cN:0;
+  const catorcenasNec=d.monthly>0&&remaining>0?Math.ceil(remaining/(d.monthly/2)):0;
+  return<div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,opacity:d.active?1:.4}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,flexWrap:"wrap",gap:6}}>
+      <div style={{display:"flex",alignItems:"center",gap:8}}><Toggle on={d.active} onChange={()=>onTog(d.id)}/><span style={{color:C.hi,fontWeight:600,fontSize:13}}>{d.name}</span>{d.note&&<span style={{fontSize:11,color:C.lo}}>{d.note}</span>}</div>
+      <div style={{display:"flex",gap:6,alignItems:"center"}}>{d.monthly>0&&<Badge label={`${fmt(d.monthly)}/mes`} color={C.pink}/>}<XBtn onClick={()=>onDel(d.id)} label={d.name}/></div>
+    </div>
+    <div style={{height:4,background:C.border,borderRadius:99,marginBottom:5}}><div style={{height:"100%",width:`${pct}%`,borderRadius:99,background:remaining<=0?C.green:C.pink,transition:"width .4s"}}/></div>
+    <div style={{fontSize:11,color:C.mid,marginBottom:8}}>{fmt(d.paid)} pagado · {fmt(remaining)} pendiente · {pct.toFixed(0)}%</div>
+    {remaining>0&&<div style={{background:C.s2,borderRadius:8,padding:"8px 12px",marginBottom:8}}>
+      <div style={{fontSize:10,color:C.lo,letterSpacing:.8,textTransform:"uppercase",marginBottom:6,fontWeight:600}}>Plan de pago catorcenal</div>
+      {d.monthly>0&&<div style={{fontSize:11,color:C.mid,marginBottom:4}}>Con {fmt(d.monthly/2)}/cat → <b style={{color:C.pink}}>{catorcenasNec} catorcenas</b> (~{(catorcenasNec/2).toFixed(1)} meses)</div>}
+      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+        <span style={{fontSize:11,color:C.mid,flexShrink:0}}>Liquidar en</span>
+        <NI value={catN} onChange={v=>setCatN(v)} width={60}/>
+        <span style={{fontSize:11,color:C.mid,flexShrink:0}}>catorcenas →</span>
+        {abonoSug>0&&<><Badge label={`${fmt(abonoSug)}/cat`} color={C.teal}/>{incomeCat>0&&<Badge label={`${((abonoSug/incomeCat)*100).toFixed(1)}% ingreso`} color={C.mid}/>}</>}
+      </div>
+    </div>}
+    {remaining>0&&<div style={{display:"flex",gap:6,alignItems:"center"}}>
+      <div style={{position:"relative",flex:1}}><span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:10,color:C.mid,pointerEvents:"none"}}>$</span><input type="number" min="0" value={payAmt} onChange={e=>setPayAmt(e.target.value)} placeholder="Abonar" style={{width:"100%",paddingLeft:18,paddingRight:6,paddingTop:6,paddingBottom:6,background:C.s2,border:`1px solid ${C.borderHi}`,borderRadius:6,color:C.hi,fontFamily:"monospace",fontSize:12,textAlign:"right",outline:"none"}}/></div>
+      <button onClick={()=>{const a=parseFloat(payAmt);if(a){onPay(d.id,a);setPayAmt("");}}} style={{background:C.pink+"22",color:C.pink,border:`1px solid ${C.pink}44`,borderRadius:6,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>Abonar</button>
+    </div>}
+    {remaining<=0&&<Badge label="✓ Liquidada" color={C.green}/>}
+    {/* Historial de abonos */}
+    {(d.abonos||[]).length>0&&<div style={{marginTop:8,borderTop:`1px solid ${C.border}`,paddingTop:6}}>
+      <div style={{fontSize:10,color:C.lo,letterSpacing:.8,textTransform:"uppercase",marginBottom:4,fontWeight:600}}>Historial de abonos</div>
+      {[...(d.abonos||[])].reverse().map((a,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.mid,padding:"2px 0"}}>
+        <span>{a.date}</span><span style={{fontFamily:"monospace",color:C.pink}}>{fmt(a.amt)}</span>
+      </div>)}
+    </div>}
+  </div>;
+}
+
 // ── DEUDAS TAB ────────────────────────────────────────────────────────────────
 function DeudasTab({totalIncome}){
   const [debts,setDebts]=useSynced("debts",[]);
-  const [name,setName]=useState(""); const [total,setTotal]=useState(""); const [monthly,setMonthly]=useState(""); const [note,setNote]=useState("");
-  function add(){if(!name.trim()||!total)return;setDebts(p=>[...p,{id:uid(),name:name.trim(),total:parseFloat(total)||0,paid:0,monthly:parseFloat(monthly)||0,note:note.trim(),active:true}]);setName("");setTotal("");setMonthly("");setNote("");}
-  function pay(id,amt){setDebts(p=>p.map(d=>d.id===id?{...d,paid:Math.min(d.total,d.paid+amt)}:d));}
+  const [name,setName]=useState(""); const [total,setTotal]=useState(""); const [note,setNote]=useState("");
+  function add(){
+    if(!name.trim()||!total)return;
+    setDebts(p=>[...p,{id:uid(),name:name.trim(),total:parseFloat(total)||0,paid:0,monthly:0,note:note.trim(),active:true,abonos:[]}]);
+    setName("");setTotal("");setNote("");
+  }
+  function pay(id,amt){
+    setDebts(p=>p.map(d=>d.id===id?{...d,paid:Math.min(d.total,d.paid+amt),abonos:[...(d.abonos||[]),{amt,date:new Date().toLocaleDateString("es-MX")}]}:d));
+  }
   function del(id){setDebts(p=>p.filter(d=>d.id!==id));}
   function tog(id){setDebts(p=>p.map(d=>d.id===id?{...d,active:!d.active}:d));}
   const incomeCat=totalIncome/2;
@@ -416,45 +600,11 @@ function DeudasTab({totalIncome}){
   return<Block label="Deudas y cargos" total={totalDebt} totalColor={C.pink} accent={C.pink} footer={<AddBtn label="Agregar deuda / cargo" onClick={add} color={C.pink}/>}>
     <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",flexDirection:"column",gap:8}}>
       <input value={name} onChange={e=>setName(e.target.value)} placeholder="Concepto (ej. Brenda, UVEG, Dentista)" style={inp}/>
-      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <div style={{flex:1,minWidth:100,position:"relative"}}><span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:C.mid,pointerEvents:"none"}}>$</span><input type="number" min="0" value={total} onChange={e=>setTotal(e.target.value)} placeholder="Monto total" style={{...inp,paddingLeft:18,textAlign:"right"}}/></div>
-        <div style={{flex:1,minWidth:100,position:"relative"}}><span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:C.mid,pointerEvents:"none"}}>$</span><input type="number" min="0" value={monthly} onChange={e=>setMonthly(e.target.value)} placeholder="Abono/mes" style={{...inp,paddingLeft:18,textAlign:"right"}}/></div>
-      </div>
+      <div style={{position:"relative"}}><span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:C.mid,pointerEvents:"none"}}>$</span><input type="number" min="0" value={total} onChange={e=>setTotal(e.target.value)} placeholder="Monto total" style={{...inp,paddingLeft:18,textAlign:"right"}}/></div>
       <input value={note} onChange={e=>setNote(e.target.value)} placeholder="Nota (opcional)" style={{...inp,color:C.mid,border:`1px solid ${C.border}`}}/>
     </div>
     {debts.length===0&&<div style={{padding:"12px 16px",color:C.lo,fontStyle:"italic",fontSize:12}}>Sin deudas registradas</div>}
-    {debts.map(d=>{
-      const remaining=d.total-d.paid;
-      const pct=d.total>0?Math.min(100,(d.paid/d.total)*100):0;
-      const [payAmt,setPayAmt]=useState("");
-      const [catN,setCatN]=useState("");
-      const cN=parseInt(catN)||0;
-      const abonoSug=cN>0&&remaining>0?remaining/cN:0;
-      const catorcenasNec=d.monthly>0&&remaining>0?Math.ceil(remaining/(d.monthly/2)):0;
-      return<div key={d.id} style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,opacity:d.active?1:.4}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,flexWrap:"wrap",gap:6}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}><Toggle on={d.active} onChange={()=>tog(d.id)}/><span style={{color:C.hi,fontWeight:600,fontSize:13}}>{d.name}</span>{d.note&&<span style={{fontSize:11,color:C.lo}}>{d.note}</span>}</div>
-          <div style={{display:"flex",gap:6,alignItems:"center"}}>{d.monthly>0&&<Badge label={`${fmt(d.monthly)}/mes`} color={C.pink}/>}<XBtn onClick={()=>del(d.id)}/></div>
-        </div>
-        <div style={{height:4,background:C.border,borderRadius:99,marginBottom:5}}><div style={{height:"100%",width:`${pct}%`,borderRadius:99,background:remaining<=0?C.green:C.pink,transition:"width .4s"}}/></div>
-        <div style={{fontSize:11,color:C.mid,marginBottom:8}}>{fmt(d.paid)} pagado · {fmt(remaining)} pendiente · {pct.toFixed(0)}%</div>
-        {remaining>0&&<div style={{background:C.s2,borderRadius:8,padding:"8px 12px",marginBottom:8}}>
-          <div style={{fontSize:10,color:C.lo,letterSpacing:.8,textTransform:"uppercase",marginBottom:6,fontWeight:600}}>Plan de pago catorcenal</div>
-          {d.monthly>0&&<div style={{fontSize:11,color:C.mid,marginBottom:4}}>Con {fmt(d.monthly/2)}/cat → <b style={{color:C.pink}}>{catorcenasNec} catorcenas</b> (~{(catorcenasNec/2).toFixed(1)} meses)</div>}
-          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-            <span style={{fontSize:11,color:C.mid,flexShrink:0}}>Liquidar en</span>
-            <NI value={catN} onChange={v=>setCatN(v)} width={60}/>
-            <span style={{fontSize:11,color:C.mid,flexShrink:0}}>catorcenas →</span>
-            {abonoSug>0&&<><Badge label={`${fmt(abonoSug)}/cat`} color={C.teal}/>{incomeCat>0&&<Badge label={`${((abonoSug/incomeCat)*100).toFixed(1)}% ingreso`} color={C.mid}/>}</>}
-          </div>
-        </div>}
-        {remaining>0&&<div style={{display:"flex",gap:6,alignItems:"center"}}>
-          <div style={{position:"relative",flex:1}}><span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:10,color:C.mid,pointerEvents:"none"}}>$</span><input type="number" min="0" value={payAmt} onChange={e=>setPayAmt(e.target.value)} placeholder="Abonar" style={{width:"100%",paddingLeft:18,paddingRight:6,paddingTop:6,paddingBottom:6,background:C.s2,border:`1px solid ${C.borderHi}`,borderRadius:6,color:C.hi,fontFamily:"monospace",fontSize:12,textAlign:"right",outline:"none"}}/></div>
-          <button onClick={()=>{const a=parseFloat(payAmt);if(a)pay(d.id,a);setPayAmt("");}} style={{background:C.pink+"22",color:C.pink,border:`1px solid ${C.pink}44`,borderRadius:6,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>Abonar</button>
-        </div>}
-        {remaining<=0&&<Badge label="✓ Liquidada" color={C.green}/>}
-      </div>;
-    })}
+    {debts.map(d=><DeudaRow key={d.id} d={d} onPay={pay} onDel={del} onTog={tog} incomeCat={incomeCat}/>)}
   </Block>;
 }
 
@@ -470,7 +620,8 @@ function TransporteTab(){
   const [cfg,setCfg]=useSynced("bus_cfg",{camion:11,transbordo:5.50,normales:2,transbordos:2,extra:0,useBiz:false});
   const [fechas,setFechas]=useSynced("bus_fechas",{inicio:"",fin:""});
   const [periodo,setPeriodo]=useState("catorcena");
-  const periodos={semana:5,catorcena:10,quincena:12,mes:22};
+  // Each period minus 1 rest day per week (user rests 1 day/week)
+  const periodos={semana:6,catorcena:12,quincena:13,mes:26};
 
   const diasCalc=useMemo(()=>{
     if(!fechas.inicio||!fechas.fin)return periodos[periodo]||10;
