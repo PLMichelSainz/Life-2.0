@@ -23,12 +23,16 @@ function fmtDate(d){return d.toLocaleDateString("es-MX",{day:"numeric",month:"sh
 function daysUntil(d){const n=new Date();n.setHours(0,0,0,0);const x=new Date(d);x.setHours(0,0,0,0);return Math.round((x-n)/864e5);}
 
 // Anchor: Jun 19 2026 = Friday (confirmed). Every 14 days.
-function nextCatorcenas(n=6){
+// Sliding window of CAT_WINDOW slots: oldest expired catorcena drops automatically,
+// new one appends at end — window always starts from current/next upcoming date.
+const CAT_WINDOW=14;
+function nextCatorcenas(n=CAT_WINDOW){
   const anchor=new Date(2026,5,19,12,0,0);
   const today=new Date();today.setHours(12,0,0,0);
   const elapsed=today.getTime()-anchor.getTime();
-  const periods=Math.max(0,Math.ceil(elapsed/(14*864e5)));
-  return Array.from({length:n},(_,i)=>new Date(anchor.getTime()+(periods+i)*14*864e5));
+  // firstIdx = index of the first catorcena >= today (expired ones drop)
+  const firstIdx=Math.max(0,Math.ceil(elapsed/(14*864e5)));
+  return Array.from({length:n},(_,i)=>new Date(anchor.getTime()+(firstIdx+i)*14*864e5));
 }
 
 // Business days between two dates EXCLUSIVE of end (working days TO travel)
@@ -101,11 +105,14 @@ function TI({value,onChange,placeholder,dimmed}){
   return<input value={value||""} onChange={e=>onChange(e.target.value)} placeholder={placeholder||""} disabled={dimmed}
     style={{flex:1,background:"transparent",border:"none",borderBottom:`1px solid ${dimmed?"transparent":C.border}`,color:dimmed?C.lo:C.hi,padding:"3px 0",outline:"none",fontFamily:"inherit",minWidth:0}}/>;
 }
-// Clear-only button (does not delete row)
+// Clear-only button: arrow → by default, flips ← on hover to signal "undo value"
 function ClearBtn({onClear}){
-  return<button onClick={onClear} title="Limpiar valor" style={{background:"none",border:"none",color:C.lo,cursor:"pointer",lineHeight:1,padding:"4px",flexShrink:0,transition:"color .15s",borderRadius:4,display:"flex",alignItems:"center",justifyContent:"center",minWidth:28,minHeight:28}}
-    onMouseEnter={e=>e.currentTarget.style.color=C.amber} onMouseLeave={e=>e.currentTarget.style.color=C.lo}>
-    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+  const [hov,setHov]=useState(false);
+  return<button onClick={onClear} title="Limpiar valor"
+    onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+    style={{background:"none",border:"none",color:hov?C.amber:C.lo,cursor:"pointer",lineHeight:1,padding:"4px",flexShrink:0,transition:"color .15s",borderRadius:4,display:"flex",alignItems:"center",justifyContent:"center",minWidth:28,minHeight:28}}>
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"
+      style={{transform:hov?"scaleX(-1)":"scaleX(1)",transition:"transform .2s"}}>
       <path d="M2 7h10M7 2l5 5-5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   </button>;
@@ -147,6 +154,20 @@ function XBtn({onClick,label}){
       <button onClick={()=>{setStep(0);setTyped("");}} style={{background:"none",border:"none",color:C.lo,cursor:"pointer",fontSize:10,padding:"2px 4px"}}>✕</button>
     </div>
   );
+}
+// Quick delete — no confirmation (for Cargos, TX rows). Arrow rotates on hover.
+function QDelBtn({onClick}){
+  const [hov,setHov]=useState(false);
+  return<button
+    onClick={e=>{e.stopPropagation();onClick();}}
+    onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+    title="Eliminar"
+    style={{background:"none",border:"none",color:hov?C.red:C.lo,cursor:"pointer",lineHeight:1,padding:"4px",flexShrink:0,transition:"color .15s",borderRadius:4,display:"flex",alignItems:"center",justifyContent:"center",minWidth:28,minHeight:28}}>
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"
+      style={{transform:hov?"scaleX(-1)":"scaleX(1)",transition:"transform .2s"}}>
+      <path d="M2 7h10M7 2l5 5-5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  </button>;
 }
 function AddBtn({label,onClick,color}){
   return<button onClick={onClick} style={{display:"flex",alignItems:"center",gap:7,width:"100%",background:"none",border:"none",padding:"10px 16px",color:C.lo,cursor:"pointer",fontFamily:"inherit",transition:"color .15s"}}
@@ -243,9 +264,11 @@ function Hero({income,fixed,extra,saving,debt,synced}){
 }
 
 // ── CATORCENA STRIP ───────────────────────────────────────────────────────────
+// 14-slot sliding window: expired catorcenas drop, new ones append automatically.
 function CatorcenaStrip({totalIncome,totalFixed,totalExtra,savingGoals,debts}){
-  const dates=useMemo(()=>nextCatorcenas(5),[]);
+  const dates=useMemo(()=>nextCatorcenas(CAT_WINDOW),[]);
   const [sel,setSel]=useState(0);
+  const scrollRef=useRef(null);
   const pay=dates[sel];
   const dias=daysUntil(pay);
   const incomeCat=totalIncome/2;
@@ -253,21 +276,40 @@ function CatorcenaStrip({totalIncome,totalFixed,totalExtra,savingGoals,debts}){
   const savingCat=savingGoals.reduce((s,g)=>s+Math.max(incomeCat*(g.pct/100),(g.target&&g.months?g.target/(g.months*2):0)),0);
   const debtCat=debts.filter(d=>d.active).reduce((s,d)=>s+(d.monthly||0)/2,0);
   const balCat=incomeCat-fixedCat-savingCat-debtCat-totalExtra;
+  useEffect(()=>{
+    if(scrollRef.current){
+      const btn=scrollRef.current.children[sel];
+      if(btn)btn.scrollIntoView({block:"nearest",inline:"center",behavior:"smooth"});
+    }
+  },[sel]);
   return<div style={{marginBottom:12}}>
-    <div style={{fontSize:10,color:C.lo,letterSpacing:.8,textTransform:"uppercase",marginBottom:8,fontWeight:600}}>
-      Catorcena — viernes cada 14 días (base 19 jun 2026)
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+      <span style={{fontSize:10,color:C.lo,letterSpacing:.8,textTransform:"uppercase",fontWeight:600}}>Catorcenas — ventana {CAT_WINDOW} períodos</span>
+      <span style={{fontSize:10,color:C.lo}}>{sel+1}/{CAT_WINDOW}</span>
     </div>
-    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+    <div ref={scrollRef} style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:6,marginBottom:8,scrollbarWidth:"none"}}>
       {dates.map((d,i)=>{
         const dU=daysUntil(d);
-        return<button key={i} onClick={()=>setSel(i)} style={{padding:"6px 11px",borderRadius:8,border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:600,background:sel===i?C.accent:C.s2,color:sel===i?C.bg:C.mid,outline:sel===i?"none":`1px solid ${C.border}`}}>
-          {fmtDate(d)}<br/><span style={{fontSize:10,fontWeight:400,color:sel===i?C.bg+"99":C.lo}}>{dU===0?"hoy":dU>0?`en ${dU}d`:`hace ${-dU}d`}</span>
+        const isSel=sel===i;
+        const isNow=dU>=0&&dU<14;
+        return<button key={i} onClick={()=>setSel(i)}
+          style={{flexShrink:0,padding:"6px 11px",borderRadius:8,border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:600,minWidth:94,textAlign:"center",
+            background:isSel?C.accent:isNow?C.accent+"18":C.s2,
+            color:isSel?C.bg:isNow?C.accent:C.mid,
+            outline:isSel?"none":isNow?`1px solid ${C.accent}44`:`1px solid ${C.border}`}}>
+          {fmtDate(d)}<br/><span style={{fontSize:10,fontWeight:400,color:isSel?C.bg+"99":C.lo}}>{dU===0?"hoy":dU>0?`en ${dU}d`:"-"}</span>
         </button>;
       })}
     </div>
+    <div style={{display:"flex",gap:6,justifyContent:"flex-end",marginBottom:8}}>
+      <button onClick={()=>setSel(s=>Math.max(0,s-1))} disabled={sel===0}
+        style={{background:"none",border:`1px solid ${C.border}`,borderRadius:6,color:sel===0?C.border:C.mid,cursor:sel===0?"default":"pointer",padding:"2px 10px",fontSize:14}}>‹</button>
+      <button onClick={()=>setSel(s=>Math.min(CAT_WINDOW-1,s+1))} disabled={sel===CAT_WINDOW-1}
+        style={{background:"none",border:`1px solid ${C.border}`,borderRadius:6,color:sel===CAT_WINDOW-1?C.border:C.mid,cursor:sel===CAT_WINDOW-1?"default":"pointer",padding:"2px 10px",fontSize:14}}>›</button>
+    </div>
     <div style={{background:C.s1,border:`2px solid ${C.accent}33`,borderRadius:14,padding:"14px 16px"}}>
       <div style={{fontSize:10,color:C.accent,letterSpacing:1,textTransform:"uppercase",fontWeight:700,marginBottom:6}}>
-        {fmtDate(pay)} — {dias>0?`en ${dias} días`:dias===0?"hoy":"pasada"}
+        {fmtDate(pay)} — {dias>0?`en ${dias} días`:dias===0?"hoy":"próxima"}
       </div>
       <div style={{fontFamily:"monospace",fontWeight:700,fontSize:26,color:balCat>=0?C.accent:C.red,marginBottom:10}}>{fmt(balCat)}</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
@@ -427,7 +469,7 @@ function MainTab({fixed,setFixed,extras,setExtras,cats,setCats,extraCats,setExtr
           <div><div style={{color:C.hi,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:13}}>{r.name}</div>{r.where&&<div style={{color:C.lo,fontSize:10}}>{r.where}</div>}</div>
           <span style={{fontSize:11,color:C.mid,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.cat}</span>
           <span style={{fontFamily:"monospace",color:C.amber,textAlign:"right",fontSize:13}}>{fmt(r.amount)}</span>
-          <XBtn onClick={()=>setExtras(p=>p.filter(x=>x.id!==r.id))}/>
+          <QDelBtn onClick={()=>setExtras(p=>p.filter(x=>x.id!==r.id))}/>
         </div>)}
       </div>}
     </Block>
@@ -564,7 +606,7 @@ function CuentasTab({totalFixed,totalExtra,incomes,setIncomes}){
           </div>
           <Badge label={typeLabels[t.type]} color={typeColors[t.type]}/>
           <span style={{fontFamily:"monospace",fontSize:13,color:typeColors[t.type],flexShrink:0}}>{t.type==="abono"?"-":""}{fmt(t.amt)}</span>
-          <XBtn onClick={()=>setTxs(p=>p.filter(x=>x.id!==t.id))} label={t.desc}/>
+          <QDelBtn onClick={()=>setTxs(p=>p.filter(x=>x.id!==t.id))}/>
         </div>)}
       </div>
     </Block>
@@ -650,8 +692,12 @@ function DeudasTab({totalIncome}){
   const [debts,setDebts]=useSynced("debts",[]);
   const [name,setName]=useState(""); const [total,setTotal]=useState("");
   function add(){
-    if(!name.trim()||!total)return;
-    setDebts(p=>[...p,{id:uid(),name:name.trim(),total:parseFloat(total)||0,paid:0,note:"",active:true,abonos:[]}]);
+    const n=name.trim();
+    const t=parseFloat(total)||0;
+    // Validate: name must be non-empty, non-numeric text; total must be >0
+    if(!n||t<=0)return;
+    if(!isNaN(Number(n)))return; // reject if user typed an amount in the name field
+    setDebts(p=>[...p,{id:uid(),name:n,total:t,paid:0,note:"",active:true,abonos:[]}]);
     setName("");setTotal("");
   }
   function pay(id,amt){
@@ -674,7 +720,7 @@ function DeudasTab({totalIncome}){
   const inp={background:C.s2,border:`1px solid ${C.borderHi}`,borderRadius:7,color:C.hi,padding:"8px 10px",fontFamily:"inherit",outline:"none",width:"100%"};
   return<Block label="Deudas y cargos" total={totalDebt} totalColor={C.pink} accent={C.pink} footer={<AddBtn label="Agregar deuda / cargo" onClick={add} color={C.pink}/>}>
     <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",flexDirection:"column",gap:8}}>
-      <input value={name} onChange={e=>setName(e.target.value)} placeholder="Concepto (ej. Brenda, UVEG, Dentista)" style={inp}/>
+      <input value={name} onChange={e=>setName(e.target.value)} placeholder="Concepto (ej. UVEG, Dentista, Tarjeta)" style={inp}/>
       <div style={{position:"relative"}}><span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:C.mid,pointerEvents:"none"}}>$</span><input type="number" min="0" value={total} onChange={e=>setTotal(e.target.value)} placeholder="Monto total de la deuda" style={{...inp,paddingLeft:18,textAlign:"right"}}/></div>
     </div>
     {debts.length===0&&<div style={{padding:"12px 16px",color:C.lo,fontStyle:"italic",fontSize:12}}>Sin deudas registradas</div>}
